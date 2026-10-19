@@ -1,0 +1,171 @@
+/* Tema claro aproximado a partir do protótipo (bloco LIGHT) e do design system Nocturne. */
+:root {
+  color-scheme: light;
+  --color-bg: #e4e7f5;
+  --color-surface: #f3f5fe;
+  --color-text: #292b31;
+  --color-accent: #344b78;
+  --color-divider: color-mix(in srgb, #292b31 18%, transparent);
+
+  --color-neutral-100: #292b31;
+  --color-neutral-200: #3f424d;
+  --color-neutral-300: #595d6c;
+  --color-neutral-400: #3f424d;
+  --color-neutral-500: #595d6c;
+  --color-neutral-600: #b2b6ca;
+  --color-neutral-700: #cfd3e5;
+  --color-neutral-800: #cfd3e5;
+  --color-neutral-900: #cfd3e5;
+
+  --color-accent-100: #172339;
+  --color-accent-200: #24365a;
+  --color-accent-300: #344b78;
+  --color-accent-400: #4a6496;
+  --color-accent-500: #7189b8;
+  --color-accent-600: #9fb2d4;
+  --color-accent-700: #c7d4ea;
+  --color-accent-800: #e1e9f6;
+  --color-accent-900: #f2f6fc;
+
+  --gold: oklch(0.8 0.15 82);
+  --gold-ink: oklch(0.5 0.11 70);
+  --gold-soft: oklch(0.86 0.11 85);
+  --gold-shade: oklch(0.62 0.13 70 / 0.45);
+  --gold-empty: oklch(0.9 0.02 85);
+  --gold-tint: oklch(0.95 0.05 88);
+
+  --shadow-sm: 0 0 0 1px #cfd3e5;
+  --shadow-md: 0 0 0 1px #cfd3e5, 0 6px 18px rgba(41, 43, 49, 0.12);
+  --shadow-lg: 0 0 0 1px #b2b6ca, 0 16px 40px rgba(41, 43, 49, 0.18);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+a, a:hover { color: var(--gold-ink); }
+
+/* Componentes do design system usados pelo protótipo */
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 16px; }
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.seg-opt {
+  position: relative;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.seg-opt input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg-opt:has(input:checked) { background: var(--color-accent); color: var(--color-surface); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--color-accent); color: var(--color-surface); }
+.btn-ghost { background: transparent; color: var(--color-text); box-shadow: var(--shadow-sm); }
+.btn-icon { padding: 0; width: 32px; height: 32px; }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.input {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.input:focus { outline: 2px solid var(--color-accent); }
+
+/* Tela do Membro */
+.page {
+  min-height: 100vh;
+  background: radial-gradient(120% 60% at 0% 0%, var(--color-accent-900) 0%, transparent 60%), var(--color-bg);
+}
+.main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 8px 16px 48px;
+}
+.member-teams { flex: 3 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.member-roster { flex: 1 1 300px; max-width: 440px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 16px; }
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  background: linear-gradient(180deg, var(--color-surface) 0%, color-mix(in srgb, var(--color-surface) 60%, var(--color-bg)) 100%);
+}
+.gold-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-soft) 48px, var(--gold-soft) calc(100% - 48px), transparent);
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 48px 24px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.reserves {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  font-size: 14px;
+}

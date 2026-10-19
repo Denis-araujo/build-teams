@@ -4,5 +4,6 @@
     "lib": ["ES2022"],
     "types": ["node", "@cloudflare/workers-types"]
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "tests"]
+  "include": ["vite.config.ts", "vitest.config.ts", "tests"],
+  "exclude": ["tests/web"]
 }
