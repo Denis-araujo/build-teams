@@ -1,3 +1,4 @@
+import { SiteHeader } from '../components/SiteHeader'
 import { StarRating } from '../components/StarRating'
 import { formatGameDate } from '../format'
 import { usePublicGame } from '../hooks/usePublicGame'
@@ -104,20 +105,10 @@ export default function MemberPage() {
   })
 
   return (
-    <div className="page">
-      <nav className="nav">
-        <div className="nav-brand">
-          <svg viewBox="0 0 256 256" width="20" height="20" aria-hidden="true" style={{ color: 'var(--gold)', filter: 'drop-shadow(0 0 6px var(--gold-soft))' }}>
-            <path
-              fill="currentColor"
-              d="M234.29,114.85l-45,38.83L203,211.75a16.4,16.4,0,0,1-24.5,17.82L128,198.49,77.47,229.57A16.4,16.4,0,0,1,53,211.75l13.76-58.07-45-38.83A16.46,16.46,0,0,1,31.08,86l59-4.76,22.76-55.08a16.36,16.36,0,0,1,30.27,0l22.75,55.08,59,4.76a16.46,16.46,0,0,1,9.37,28.86Z"
-            />
-          </svg>
-          <h1 style={{ margin: 0, fontSize: 'inherit', fontWeight: 'inherit' }}>Escalação</h1>
-        </div>
-      </nav>
+    <div className="min-h-screen text-text bg-bg">
+      <SiteHeader roleLabel="Membro" titleAsH1 />
 
-      <main className="main">
+      <main className="flex flex-wrap gap-[28px] px-[28px] pt-[24px] pb-[56px] items-start max-w-[1440px] mx-auto box-border">
         {!game ? (
           error ? (
             <p className="empty" role="status">
