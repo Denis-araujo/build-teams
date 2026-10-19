@@ -44,6 +44,7 @@ const ADMIN_ROUTES: [string, string][] = [
   ['PATCH', '/admin/game'],
   ['DELETE', '/admin/game'],
   ['PUT', '/admin/game/paid'],
+  ['PUT', '/admin/game/paid-all'],
   ['PUT', '/admin/game/draw'],
   ['GET', '/admin/settings'],
   ['PATCH', '/admin/settings'],
@@ -315,6 +316,22 @@ describe('finalização em qualquer requisição', () => {
     expect((await send('POST', '/admin/game', { date: '2026-10-25' }, cookie)).status).toBe(201)
     const hist = (await (await send('GET', '/admin/history', undefined, cookie)).json()) as { gameDate: string }[]
     expect(hist.map((h) => h.gameDate)).toEqual([TODAY])
+  })
+
+  it('PUT paid-all: valida corpo, marca/limpa e 404 sem jogo', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    await send('POST', '/admin/players', { name: 'Ana', rating: 0.5 }, cookie)
+    expect((await send('PUT', '/admin/game/paid-all', { paid: true }, cookie)).status).toBe(404)
+    await send('POST', '/admin/game', { date: TODAY }, cookie)
+    expect((await send('PUT', '/admin/game/paid-all', { paid: 'x' }, cookie)).status).toBe(400)
+    expect((await send('PUT', '/admin/game/paid-all', undefined, cookie)).status).toBe(400)
+    const on = await send('PUT', '/admin/game/paid-all', { paid: true }, cookie)
+    expect(on.status).toBe(200)
+    expect(((await on.json()) as { paid: string[] }).paid).toHaveLength(1)
+    const off = await send('PUT', '/admin/game/paid-all', { paid: false }, cookie)
+    expect(off.status).toBe(200)
+    expect(((await off.json()) as { paid: string[] }).paid).toEqual([])
   })
 
   it('depois do fim, GET /admin/game -> null e PUT paid -> 404', async () => {

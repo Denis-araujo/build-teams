@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createTestDb } from '../helpers/testDb'
 import { NotFoundError, ValidationError } from '../../src/server/errors'
-import { createPlayer } from '../../src/server/players'
+import { archivePlayer, createPlayer } from '../../src/server/players'
 import {
   archivePlayerInGame,
   createGame,
@@ -10,6 +10,7 @@ import {
   getSetting,
   isUniqueViolation,
   saveDraw,
+  setAllPaid,
   setPaid,
   setSetting,
   updateGameDate,
@@ -195,6 +196,74 @@ describe('games', () => {
     expect(isUniqueViolation('x')).toBe(false)
   })
 
+  describe('setAllPaid', () => {
+    const full = (a: string, b: string, c: string): DrawState => ({
+      teamCount: 2,
+      teamSize: 2,
+      teams: [[a, c], [b]],
+      reserves: [],
+      locks: { [a]: 0 },
+    })
+
+    it('true marks exactly the non-archived players, idempotently', async () => {
+      const { db, a, b, c } = await setup()
+      await archivePlayer(db, c.id)
+      const g = await setAllPaid(db, true)
+      expect(g.paid.sort()).toEqual([a.id, b.id].sort())
+      const again = await setAllPaid(db, true)
+      expect(again.paid.sort()).toEqual([a.id, b.id].sort())
+    })
+
+    it('true keeps an existing draw intact', async () => {
+      const { db, a, b } = await setup()
+      await setPaid(db, a.id, true)
+      await setPaid(db, b.id, true)
+      const state: DrawState = { teamCount: 2, teamSize: 2, teams: [[a.id], [b.id]], reserves: [], locks: {} }
+      await saveDraw(db, state)
+      const g = await setAllPaid(db, true)
+      expect(g.draw).toEqual(state)
+      expect(g.paid).toHaveLength(3)
+    })
+
+    it('a player created after setAllPaid(true) starts unpaid', async () => {
+      const { db } = await setup()
+      await setAllPaid(db, true)
+      const d = await createPlayer(db, { name: 'Davi', rating: 3 })
+      expect((await getActiveGame(db))!.paid).not.toContain(d.id)
+    })
+
+    it('false clears payments and empties the stored draw, keeping counts', async () => {
+      const { db, a, b, c } = await setup()
+      await setAllPaid(db, true)
+      await saveDraw(db, { teamCount: 2, teamSize: 2, teams: [[a.id, c.id], [b.id]], reserves: [], locks: { [a.id]: 0 } })
+      const g = await setAllPaid(db, false)
+      expect(g.paid).toEqual([])
+      expect(g.draw).toEqual({ teamCount: 2, teamSize: 2, teams: [[], []], reserves: [], locks: {} })
+    })
+
+    it('false with reserves empties them too', async () => {
+      const { db, a, b, c } = await setup()
+      await setAllPaid(db, true)
+      await saveDraw(db, { teamCount: 2, teamSize: 1, teams: [[a.id], [b.id]], reserves: [c.id], locks: {} })
+      const g = await setAllPaid(db, false)
+      expect(g.draw).toEqual({ teamCount: 2, teamSize: 1, teams: [[], []], reserves: [], locks: {} })
+    })
+
+    it('false without a stored draw leaves draw null', async () => {
+      const { db } = await setup()
+      await setAllPaid(db, true)
+      const g = await setAllPaid(db, false)
+      expect(g.paid).toEqual([])
+      expect(g.draw).toBeNull()
+    })
+
+    it('without an active game throws NotFoundError', async () => {
+      const db = createTestDb()
+      await expect(setAllPaid(db, true)).rejects.toThrow(NotFoundError)
+      await expect(setAllPaid(db, false)).rejects.toThrow(NotFoundError)
+    })
+  })
+
   describe('concurrency', () => {
     // Runs `hook` after a matching read/write: `all` of game_paid (gap between read and
     // phase 1) or `run` of the revision-guarded UPDATE (gap between phase 1 and phase 2).
@@ -291,6 +360,77 @@ describe('games', () => {
       const { a, b, result, g } = await unpaidScenario('phase1', false)
       expect(result).toBeInstanceOf(ValidationError)
       expect(g.paid.sort()).toEqual([a.id, b.id].sort())
+    })
+
+    describe('setAllPaid races', () => {
+      const noUnpaidInDraw = (g: { paid: string[]; draw: DrawState | null }) => {
+        if (!g.draw) return
+        const ids = [...g.draw.teams.flat(), ...g.draw.reserves, ...Object.keys(g.draw.locks)]
+        for (const id of ids) expect(g.paid).toContain(id)
+      }
+
+      async function prepared() {
+        const s = await setup()
+        await setAllPaid(s.db, true)
+        await saveDraw(s.db, { teamCount: 2, teamSize: 2, teams: [[s.a.id], [s.b.id]], reserves: [], locks: {} })
+        return s
+      }
+
+      it.each(['read', 'phase1'] as const)('false vs competing saveDraw (%s gap) keeps the invariant and recovers', async (where) => {
+        const { db, a, b, c } = await prepared()
+        const racy = withGap(db, where, async () => {
+          await saveDraw(db, { teamCount: 2, teamSize: 2, teams: [[a.id, c.id], [b.id]], reserves: [], locks: {} })
+        })
+        const g = await setAllPaid(racy, false)
+        expect(g.paid).toEqual([])
+        expect(g.draw!.teams).toEqual([[], []])
+        noUnpaidInDraw(g)
+      })
+
+      it('false exhausted by competing writes leaves game_paid untouched', async () => {
+        const { db, a, b } = await prepared()
+        const racy = withGap(db, 'phase1', async () => {
+          await saveDraw(db, { teamCount: 2, teamSize: 2, teams: [[b.id], [a.id]], reserves: [], locks: {} })
+        }, false)
+        await expect(setAllPaid(racy, false)).rejects.toThrow(ValidationError)
+        const g = (await getActiveGame(db))!
+        expect(g.paid).toHaveLength(3)
+        noUnpaidInDraw(g)
+      })
+
+      it.each(['read', 'phase1'] as const)('true vs competing setPaid (%s gap) ends with everyone paid', async (where) => {
+        const { db, a } = await setup()
+        const racy = withGap(db, where, async () => {
+          await setPaid(db, a.id, true)
+        })
+        const g = await setAllPaid(racy, true)
+        expect(g.paid).toHaveLength(3)
+      })
+
+      it('true: a saveDraw validated against the old paid list never stores an unpaid player', async () => {
+        const { db, a, b } = await setup()
+        await setPaid(db, a.id, true)
+        await setPaid(db, b.id, true)
+        const racy = withGap(db, 'read', async () => {
+          await setAllPaid(db, false)
+        })
+        await expect(
+          saveDraw(racy, { teamCount: 2, teamSize: 2, teams: [[a.id], [b.id]], reserves: [], locks: {} }),
+        ).rejects.toThrow(ValidationError)
+        const g = (await getActiveGame(db))!
+        expect(g.paid).toEqual([])
+        noUnpaidInDraw(g)
+      })
+
+      it('true exhausted by competing writes does not half-apply', async () => {
+        const { db, a } = await setup()
+        await setPaid(db, a.id, true)
+        const racy = withGap(db, 'phase1', async () => {
+          await setPaid(db, a.id, true)
+        }, false)
+        await expect(setAllPaid(racy, true)).rejects.toThrow(ValidationError)
+        expect((await getActiveGame(db))!.paid).toEqual([a.id])
+      })
     })
   })
 

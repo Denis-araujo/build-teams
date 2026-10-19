@@ -21,6 +21,7 @@ import {
   getSetting,
   saveDraw,
   archivePlayerInGame,
+  setAllPaid,
   setPaid,
   setSetting,
   updateGameDate,
@@ -194,6 +195,12 @@ export function createApp(opts: { now?: () => Date } = {}) {
     const { playerId, paid } = await readBody(c)
     if (typeof playerId !== 'string' || typeof paid !== 'boolean') throw bad()
     return c.json(await setPaid(c.env.DB, playerId, paid))
+  })
+
+  app.put('/admin/game/paid-all', async (c) => {
+    const { paid } = await readBody(c)
+    if (typeof paid !== 'boolean') throw bad()
+    return c.json(await setAllPaid(c.env.DB, paid))
   })
 
   app.put('/admin/game/draw', async (c) =>

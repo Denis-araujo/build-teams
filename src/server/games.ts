@@ -170,6 +170,50 @@ export async function setPaid(db: D1Database, playerId: string, paid: boolean): 
   throw new ValidationError(CHANGED)
 }
 
+function emptiedDraw(d: DrawState | null): DrawState | null {
+  if (!d) return null
+  return { ...d, teams: Array.from({ length: d.teamCount }, () => [] as string[]), reserves: [], locks: {} }
+}
+
+// Marca todos os não arquivados como pagos, ou limpa todos os pagamentos e zera o sorteio.
+// Mesmo protocolo de duas fases de setPaid.
+export async function setAllPaid(db: D1Database, paid: boolean): Promise<Game> {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const game = await requireActive(db)
+    const rev = game.revision
+    const next = paid ? null : emptiedDraw(game.draw)
+    const phase1 = next
+      ? db
+          .prepare(
+            "UPDATE games SET draw_json = ?, revision = revision + 1 WHERE id = ? AND state = 'active' AND revision = ?",
+          )
+          .bind(JSON.stringify(next), game.id, rev)
+      : db
+          .prepare(
+            "UPDATE games SET revision = revision + 1 WHERE id = ? AND state = 'active' AND revision = ?",
+          )
+          .bind(game.id, rev)
+    if ((await phase1.run()).meta.changes !== 1) continue
+
+    const guard = 'EXISTS (SELECT 1 FROM games WHERE id = ? AND revision = ?)'
+    const pay = paid
+      ? db
+          .prepare(
+            `INSERT OR IGNORE INTO game_paid (game_id, player_id) SELECT ?, id FROM players WHERE archived = 0 AND ${guard}`,
+          )
+          .bind(game.id, game.id, rev + 1)
+      : db
+          .prepare(`DELETE FROM game_paid WHERE game_id = ? AND ${guard}`)
+          .bind(game.id, game.id, rev + 1)
+    const bump = db
+      .prepare('UPDATE games SET revision = revision + 1 WHERE id = ? AND revision = ?')
+      .bind(game.id, rev + 1)
+    const [, bumped] = await db.batch([pay, bump])
+    if (bumped.meta.changes === 1) return publicGame(await requireActive(db))
+  }
+  throw new ValidationError(CHANGED)
+}
+
 // Arquiva o jogador e antes o tira do jogo ativo (pagamento, times, reservas, travas).
 export async function archivePlayerInGame(db: D1Database, id: string): Promise<void> {
   if (await loadActive(db)) {

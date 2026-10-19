@@ -19,8 +19,8 @@ function validName(name: unknown): string {
 }
 
 function validRating(rating: unknown): number {
-  if (typeof rating !== 'number' || !Number.isFinite(rating) || rating < 1 || rating > 5 || (rating * 2) % 1 !== 0) {
-    throw new ValidationError('A nota deve ser de 1 a 5, em passos de 0,5')
+  if (typeof rating !== 'number' || !Number.isFinite(rating) || rating < 0.5 || rating > 5 || (rating * 2) % 1 !== 0) {
+    throw new ValidationError('A nota deve ser de 0,5 a 5, em passos de 0,5')
   }
   return rating
 }

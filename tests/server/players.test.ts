@@ -27,9 +27,19 @@ describe('players', () => {
     expect((await listPlayers(db)).map((p) => p.name)).toEqual(['Álvaro', 'André', 'Bia', 'érica', 'Zeca'])
   })
 
-  it.each([0.7, 0, 5.5])('rejects rating %s', async (rating) => {
+  it.each([0.7, 0, 0.25, 5.5, -1, Number.NaN, Infinity, '3'])('rejects rating %s', async (rating) => {
     const db = createTestDb()
-    await expect(createPlayer(db, { name: 'Ana', rating })).rejects.toThrow(ValidationError)
+    await expect(createPlayer(db, { name: 'Ana', rating: rating as number })).rejects.toThrow(ValidationError)
+  })
+
+  it('accepts rating 0.5 on create and update', async () => {
+    const db = createTestDb()
+    const p = await createPlayer(db, { name: 'Ana', rating: 0.5 })
+    expect(p.rating).toBe(0.5)
+    const q = await createPlayer(db, { name: 'Bia', rating: 3 })
+    expect((await updatePlayer(db, q.id, { rating: 0.5 })).rating).toBe(0.5)
+    await expect(updatePlayer(db, q.id, { rating: 0.25 })).rejects.toThrow(ValidationError)
+    await expect(updatePlayer(db, q.id, { rating: 0 })).rejects.toThrow(ValidationError)
   })
 
   it('rejects blank and too-long names', async () => {
