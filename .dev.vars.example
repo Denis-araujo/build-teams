@@ -1,0 +1,4 @@
+# Copie para .dev.vars (ignorado pelo git) para rodar localmente.
+# Use valores descartaveis; NUNCA coloque segredos reais aqui.
+ADMIN_PASSWORD=
+SESSION_SECRET=
