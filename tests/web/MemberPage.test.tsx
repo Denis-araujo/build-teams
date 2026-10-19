@@ -14,8 +14,8 @@ function game(over: Partial<PublicGame> = {}): PublicGame {
     date: '2026-10-17',
     showStars: false,
     players: [
-      { id: 'a', name: 'Rafael', paid: true },
-      { id: 'b', name: 'Bruno', paid: false },
+      { id: 'p1', name: 'Rafael', paid: true },
+      { id: 'p2', name: 'Bruno', paid: false },
     ],
     teams: [],
     reserves: [],
@@ -68,32 +68,86 @@ describe('MemberPage', () => {
     setup(
       game({
         showStars: true,
-        players: [{ id: 'a', name: 'Rafael', paid: true, rating: 4.5 }],
+        players: [{ id: 'p1', name: 'Rafael', paid: true, rating: 4.5 }],
       }),
     )
     await screen.findByText('Rafael')
     expect(screen.getByLabelText('4,5 estrelas')).toBeTruthy()
   })
 
-  it('depois do sorteio mostra times e reservas', async () => {
+  it('depois do sorteio mostra times (por id) e reservas', async () => {
     setup(
       game({
         players: [
-          { id: 'a', name: 'Rafael', paid: true },
-          { id: 'b', name: 'Bruno', paid: true },
-          { id: 'c', name: 'Caio', paid: false },
+          { id: 'p1', name: 'Rafael', paid: true },
+          { id: 'p2', name: 'Bruno', paid: true },
+          { id: 'p3', name: 'Caio', paid: false },
         ],
-        teams: [['Rafael'], ['Bruno']],
-        reserves: ['Caio'],
+        teams: [['p1'], ['p2']],
+        reserves: ['p3'],
       }),
     )
-    expect(await screen.findByText('Time A')).toBeTruthy()
-    expect(screen.getByText('Time B')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Time A' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Time B' })).toBeTruthy()
     expect(screen.getAllByText('1 jogador')).toHaveLength(2)
-    expect(screen.getByText('Reservas')).toBeTruthy()
-    expect(screen.getAllByText('Rafael').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Caio').length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { name: 'Reservas' })).toBeTruthy()
+    const cardA = screen.getByRole('heading', { name: 'Time A' }).closest('section')!
+    expect(cardA.textContent).toContain('Rafael')
+    expect(cardA.textContent).not.toContain('p1')
+    const reserves = screen.getByRole('heading', { name: 'Reservas' }).closest('section')!
+    expect(reserves.textContent).toContain('Caio')
+    expect(document.body.textContent).not.toMatch(/p[123]/)
     expect(screen.queryByText('Os times ainda não foram sorteados')).toBeNull()
+  })
+
+  it('nomes repetidos: cada card mostra as próprias estrelas', async () => {
+    setup(
+      game({
+        showStars: true,
+        players: [
+          { id: 'p1', name: 'João', paid: true, rating: 2 },
+          { id: 'p2', name: 'João', paid: true, rating: 4.5 },
+        ],
+        teams: [['p1'], ['p2']],
+      }),
+    )
+    const a = (await screen.findByRole('heading', { name: 'Time A' })).closest('section')!
+    const b = screen.getByRole('heading', { name: 'Time B' }).closest('section')!
+    expect(a.querySelector('[aria-label="2 estrelas"]')).not.toBeNull()
+    expect(a.querySelector('[aria-label="4,5 estrelas"]')).toBeNull()
+    expect(b.querySelector('[aria-label="4,5 estrelas"]')).not.toBeNull()
+  })
+
+  it('id desconhecido num time não quebra a tela', async () => {
+    setup(
+      game({
+        players: [{ id: 'p1', name: 'Rafael', paid: true }],
+        teams: [['p1', 'zzz']],
+        reserves: ['yyy'],
+      }),
+    )
+    const card = (await screen.findByRole('heading', { name: 'Time A' })).closest('section')!
+    expect(card.textContent).toContain('Rafael')
+    expect(card.textContent).toContain('1 jogador')
+    expect(document.body.textContent).not.toContain('zzz')
+    expect(screen.queryByRole('heading', { name: 'Reservas' })).toBeNull()
+  })
+
+  it('o título da página é h1 e a data aparece como subtítulo', async () => {
+    setup(game())
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Escalação')
+  })
+
+  it('estrelas dentro dos cards quando há rating', async () => {
+    setup(
+      game({
+        showStars: true,
+        players: [{ id: 'p1', name: 'Rafael', paid: true, rating: 3.5 }],
+        teams: [['p1']],
+      }),
+    )
+    const card = (await screen.findByRole('heading', { name: 'Time A' })).closest('section')!
+    expect(card.querySelector('[aria-label="3,5 estrelas"]')).not.toBeNull()
   })
 
   describe('atualização automática', () => {
@@ -125,6 +179,46 @@ describe('MemberPage', () => {
       })
       expect(fetchMock).toHaveBeenCalledTimes(2)
       expect(screen.getByText('Rafael')).toBeTruthy()
+    })
+
+    it('resposta antiga não sobrescreve a mais nova', async () => {
+      const resolvers: ((r: Response) => void)[] = []
+      const fetchMock = vi.fn(() => new Promise<Response>((res) => resolvers.push(res)))
+      vi.stubGlobal('fetch', fetchMock)
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <App />
+        </MemoryRouter>,
+      )
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      expect(resolvers).toHaveLength(2)
+      const newer = game({ players: [{ id: 'p9', name: 'Novo', paid: true }] })
+      const older = game({ players: [{ id: 'p8', name: 'Antigo', paid: true }] })
+      await act(async () => {
+        resolvers[1](respond(newer))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      await act(async () => {
+        resolvers[0](respond(older))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(screen.getByText('Novo')).toBeTruthy()
+      expect(screen.queryByText('Antigo')).toBeNull()
+    })
+
+    it('ao desmontar, não busca mais', async () => {
+      const fetchMock = setup(game())
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      cleanup()
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+        await vi.advanceTimersByTimeAsync(90000)
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
     it('busca de novo quando a aba volta a ficar visível', async () => {

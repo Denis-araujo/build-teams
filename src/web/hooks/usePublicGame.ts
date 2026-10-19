@@ -13,18 +13,20 @@ export function usePublicGame(intervalMs = 30000): {
 
   useEffect(() => {
     let active = true
+    let latest = 0
     const load = async () => {
+      const mine = ++latest
       try {
         const g = await api.getGame()
-        if (!active) return
+        if (!active || mine !== latest) return
         setGame(g)
         setError(null)
       } catch (e) {
-        if (!active) return
+        if (!active || mine !== latest) return
         // mantém os dados anteriores na tela
         setError(e instanceof Error ? e.message : 'Erro ao carregar')
       } finally {
-        if (active) setLoading(false)
+        if (active && mine === latest) setLoading(false)
       }
     }
     void load()

@@ -21,9 +21,9 @@ function Roster({ game }: { game: PublicGame }) {
           {game.players.length} {game.players.length === 1 ? 'jogador' : 'jogadores'}
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <ul className="plain-list" style={{ display: 'flex', flexDirection: 'column' }}>
         {game.players.map((p) => (
-          <div
+          <li
             key={p.id}
             style={{
               display: 'flex',
@@ -41,32 +41,35 @@ function Roster({ game }: { game: PublicGame }) {
             >
               {p.paid ? 'Pago' : 'Aguardando'}
             </span>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   )
 }
 
 function TeamCards({ game }: { game: PublicGame }) {
-  const ratings = new Map(game.players.map((p) => [p.name, p.rating]))
+  const byId = new Map(game.players.map((p) => [p.id, p]))
   return (
     <div className="team-grid">
-      {game.teams.map((team, i) => (
-        <div key={i} className="team-card">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={label}>
-              {team.length} {team.length === 1 ? 'jogador' : 'jogadores'}
-            </span>
-            <span style={{ fontSize: 20, fontWeight: 500 }}>Time {LETTERS[i] ?? i + 1}</span>
-          </div>
-          <div className="gold-rule" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {team.map((name) => {
-              const rating = ratings.get(name)
-              return (
-                <div
-                  key={name}
+      {game.teams.map((team, i) => {
+        const members = team.flatMap((id) => {
+          const p = byId.get(id)
+          return p ? [p] : []
+        })
+        return (
+          <section key={i} className="team-card">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={label}>
+                {members.length} {members.length === 1 ? 'jogador' : 'jogadores'}
+              </span>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Time {LETTERS[i] ?? i + 1}</h2>
+            </div>
+            <div className="gold-rule" />
+            <ul className="plain-list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {members.map((p) => (
+                <li
+                  key={p.id}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14 }}
                 >
                   <span
@@ -78,15 +81,15 @@ function TeamCards({ game }: { game: PublicGame }) {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {name}
+                    {p.name}
                   </span>
-                  {rating !== undefined && <StarRating value={rating} size={12} />}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ))}
+                  {p.rating !== undefined && <StarRating value={p.rating} size={12} />}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
     </div>
   )
 }
@@ -94,6 +97,11 @@ function TeamCards({ game }: { game: PublicGame }) {
 export default function MemberPage() {
   const { game, loading } = usePublicGame()
   const hasTeams = !!game && game.teams.length > 0
+  const byId = new Map((game?.players ?? []).map((p) => [p.id, p]))
+  const reserves = (game?.reserves ?? []).flatMap((id) => {
+    const p = byId.get(id)
+    return p ? [p] : []
+  })
 
   return (
     <div className="page">
@@ -105,7 +113,7 @@ export default function MemberPage() {
               d="M234.29,114.85l-45,38.83L203,211.75a16.4,16.4,0,0,1-24.5,17.82L128,198.49,77.47,229.57A16.4,16.4,0,0,1,53,211.75l13.76-58.07-45-38.83A16.46,16.46,0,0,1,31.08,86l59-4.76,22.76-55.08a16.36,16.36,0,0,1,30.27,0l22.75,55.08,59,4.76a16.46,16.46,0,0,1,9.37,28.86Z"
             />
           </svg>
-          <span>Escalação</span>
+          <h1 style={{ margin: 0, fontSize: 'inherit', fontWeight: 'inherit' }}>Escalação</h1>
         </div>
       </nav>
 
@@ -119,9 +127,9 @@ export default function MemberPage() {
         ) : (
           <>
             <section className="member-teams">
-              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>
+              <p style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>
                 {formatGameDate(game.date)}
-              </h1>
+              </p>
               {!hasTeams && (
                 <div className="empty">
                   <span style={{ fontSize: 16 }}>Os times ainda não foram sorteados</span>
@@ -131,17 +139,17 @@ export default function MemberPage() {
                 </div>
               )}
               {hasTeams && <TeamCards game={game} />}
-              {hasTeams && game.reserves.length > 0 && (
-                <div className="reserves">
-                  <span style={label}>Reservas</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {game.reserves.map((name) => (
-                      <span key={name} className="chip">
-                        {name}
-                      </span>
+              {hasTeams && reserves.length > 0 && (
+                <section className="reserves">
+                  <h2 style={{ ...label, margin: 0, fontWeight: 'inherit' }}>Reservas</h2>
+                  <ul className="plain-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {reserves.map((p) => (
+                      <li key={p.id} className="chip">
+                        {p.name}
+                      </li>
                     ))}
-                  </div>
-                </div>
+                  </ul>
+                </section>
               )}
             </section>
             <Roster game={game} />

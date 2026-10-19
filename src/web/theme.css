@@ -169,3 +169,5 @@ a, a:hover { color: var(--gold-ink); }
   box-shadow: var(--shadow-sm);
   font-size: 14px;
 }
+
+.plain-list { list-style: none; margin: 0; padding: 0; }
