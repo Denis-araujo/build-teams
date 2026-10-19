@@ -20,6 +20,13 @@ describe('players', () => {
     expect((await listPlayers(db)).map((p) => p.name)).toEqual(['ana', 'Bia', 'carla'])
   })
 
+  it('sorts accented names with their base letters (pt-BR)', async () => {
+    const db = createTestDb()
+    for (const name of ['Zeca', 'Álvaro', 'Bia', 'érica', 'André'])
+      await createPlayer(db, { name, rating: 3 })
+    expect((await listPlayers(db)).map((p) => p.name)).toEqual(['Álvaro', 'André', 'Bia', 'érica', 'Zeca'])
+  })
+
   it.each([0.7, 0, 5.5])('rejects rating %s', async (rating) => {
     const db = createTestDb()
     await expect(createPlayer(db, { name: 'Ana', rating })).rejects.toThrow(ValidationError)

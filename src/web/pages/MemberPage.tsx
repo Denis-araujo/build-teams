@@ -95,7 +95,7 @@ function TeamCards({ game }: { game: PublicGame }) {
 }
 
 export default function MemberPage() {
-  const { game, loading } = usePublicGame()
+  const { game, loading, error } = usePublicGame()
   const hasTeams = !!game && game.teams.length > 0
   const byId = new Map((game?.players ?? []).map((p) => [p.id, p]))
   const reserves = (game?.reserves ?? []).flatMap((id) => {
@@ -119,10 +119,16 @@ export default function MemberPage() {
 
       <main className="main">
         {!game ? (
-          !loading && (
-            <div className="empty">
-              <span style={{ fontSize: 16 }}>Nenhum jogo marcado</span>
-            </div>
+          error ? (
+            <p className="empty" role="status">
+              Não foi possível carregar a escalação. Tentando de novo…
+            </p>
+          ) : (
+            !loading && (
+              <div className="empty">
+                <span style={{ fontSize: 16 }}>Nenhum jogo marcado</span>
+              </div>
+            )
           )
         ) : (
           <>

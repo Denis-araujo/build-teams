@@ -59,6 +59,19 @@ function drag(name: string) {
   return data
 }
 
+describe('jogo finalizado em outra aba', () => {
+  it('404 ao salvar chama onStale e mostra que o jogo mudou', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respond(404, { error: 'Não há jogo ativo' })))
+    const onStale = vi.fn()
+    render(
+      <DrawArea game={GAME(DRAW())} players={PLAYERS} onGameChange={() => {}} onUnauthorized={() => {}} onStale={onStale} />,
+    )
+    fireEvent.drop(card('B'), { dataTransfer: drag('Ana') })
+    await waitFor(() => expect(onStale).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole('alert').textContent).toBe('O jogo mudou. A página foi atualizada.')
+  })
+})
+
 describe('arrastar e soltar', () => {
   it('soltar em outro time faz um PUT e a tela mostra a RESPOSTA', async () => {
     const reply = DRAW({ teams: [['b'], ['c', 'a']], reserves: ['d', 'e'] })

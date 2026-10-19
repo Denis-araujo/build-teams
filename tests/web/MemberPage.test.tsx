@@ -48,6 +48,28 @@ describe('MemberPage', () => {
     expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()
   })
 
+  it('primeira busca falha: avisa que tenta de novo e não diz que não há jogo; o próximo poll recupera', async () => {
+    vi.useFakeTimers()
+    let n = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => (n++ === 0 ? respond({ error: 'x' }, false, 500) : respond(game()))),
+    )
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>,
+    )
+    await act(async () => {})
+    expect(screen.getByRole('status').textContent).toBe('Não foi possível carregar a escalação. Tentando de novo…')
+    expect(screen.queryByText('Nenhum jogo marcado')).toBeNull()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+    expect(screen.getByText('Rafael')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('mostra a data e o elenco com o status de pagamento', async () => {
     setup(game())
     expect(await screen.findByText('Sábado, 17/10')).toBeTruthy()
@@ -232,6 +254,28 @@ describe('MemberPage', () => {
         await vi.advanceTimersByTimeAsync(0)
       })
       expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('não busca no intervalo enquanto a aba está escondida', async () => {
+      const state = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+      try {
+        const fetchMock = setup(game())
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0)
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(90000)
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        state.mockReturnValue('visible')
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(30000)
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+      } finally {
+        state.mockRestore()
+      }
     })
   })
 })

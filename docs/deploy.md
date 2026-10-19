@@ -48,7 +48,7 @@ npx wrangler pages project create montar-times --production-branch main
 
 Como o `wrangler.toml` tem `pages_build_output_dir`, o wrangler o trata como configuração do projeto Pages, e o bloco `[[d1_databases]]` (binding `DB`) deveria ser aplicado no deploy. **Não verificado numa conta real**: só foi testado localmente.
 
-Plano B (documentado): se o `/api/game` responder 500 com "DB" undefined/no such table, faça este passo no painel e refaça o deploy. No painel: projeto Pages `montar-times` > Settings > Functions > D1 database bindings > Add binding, com variável `DB` e banco `montar-times`, para o ambiente Production. Depois rode o passo 6 de novo.
+Plano B (documentado): se o `/api/game` responder 500 com "DB" undefined/no such table, primeiro confira que o `database_id` no `wrangler.toml` é o id real impresso por `d1 create` (não o valor de exemplo) e refaça o deploy (passo 6). Com `pages_build_output_dir`, o `wrangler.toml` é a fonte da verdade, então um id errado ali é a causa mais provável. Só como último recurso, crie o binding no painel: projeto Pages `montar-times` > Settings > Functions > D1 database bindings > Add binding, com variável `DB` e banco `montar-times`, para o ambiente Production, e refaça o deploy. Atenção: quando o projeto é gerenciado pelo `wrangler.toml`, o painel pode mostrar os bindings como somente leitura ou ignorá-los em favor do arquivo.
 
 ### 6. Build e primeiro deploy
 

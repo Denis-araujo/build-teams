@@ -2,6 +2,8 @@ import type { DrawState, Game } from '../shared/types'
 import { isGameDateAllowed } from '../shared/dates'
 import { validateDrawState } from '../shared/drawValidation'
 import { NotFoundError, ValidationError } from './errors'
+import { safeParseDraw } from './draw-json'
+import { archivePlayer } from './players'
 
 export type { Game }
 
@@ -29,7 +31,7 @@ async function loadActive(db: D1Database): Promise<Loaded | null> {
     date: row.date,
     revision: row.revision,
     paid: results.map((r) => r.player_id),
-    draw: row.draw_json ? (JSON.parse(row.draw_json) as DrawState) : null,
+    draw: safeParseDraw(row.draw_json),
   }
 }
 
@@ -148,6 +150,19 @@ export async function setPaid(db: D1Database, playerId: string, paid: boolean): 
     if (bumped.meta.changes === 1) return publicGame(await requireActive(db))
   }
   throw new ValidationError(CHANGED)
+}
+
+// Arquiva o jogador e antes o tira do jogo ativo (pagamento, times, reservas, travas).
+export async function archivePlayerInGame(db: D1Database, id: string): Promise<void> {
+  if (await loadActive(db)) {
+    try {
+      await setPaid(db, id, false)
+    } catch (e) {
+      // O jogo pode ter sido finalizado entre a leitura e a escrita: só arquiva.
+      if (!(e instanceof NotFoundError && e.message === NO_ACTIVE)) throw e
+    }
+  }
+  await archivePlayer(db, id)
 }
 
 export async function saveDraw(db: D1Database, state: DrawState): Promise<Game> {

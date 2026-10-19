@@ -67,12 +67,14 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 onPlayersChange={data.setPlayers}
                 onGameChange={data.setGame}
                 onUnauthorized={onLoggedOut}
+                onStale={() => void data.reload()}
               />
               <DrawArea
                 game={data.game}
                 players={data.players}
                 onGameChange={data.setGame}
                 onUnauthorized={onLoggedOut}
+                onStale={() => void data.reload()}
               />
             </section>
           </>

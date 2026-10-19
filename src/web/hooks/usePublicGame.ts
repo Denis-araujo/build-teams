@@ -30,7 +30,11 @@ export function usePublicGame(intervalMs = 30000): {
       }
     }
     void load()
-    const timer = setInterval(() => void load(), intervalMs)
+    const timer = setInterval(() => {
+      // Aba escondida não consome a cota de requisições; ao voltar, visibilitychange recarrega.
+      if (document.visibilityState === 'hidden') return
+      void load()
+    }, intervalMs)
     const onVisible = () => {
       if (document.visibilityState === 'visible') void load()
     }

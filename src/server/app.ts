@@ -20,12 +20,13 @@ import {
   getActiveGame,
   getSetting,
   saveDraw,
+  archivePlayerInGame,
   setPaid,
   setSetting,
   updateGameDate,
 } from './games'
 import { listHistory } from './history'
-import { archivePlayer, createPlayer, listPlayers, updatePlayer } from './players'
+import { createPlayer, listPlayers, updatePlayer } from './players'
 import { getPublicGame } from './publicGame'
 
 type Env = { Bindings: { DB: D1Database; ADMIN_PASSWORD: string; SESSION_SECRET: string } }
@@ -166,7 +167,7 @@ export function createApp(opts: { now?: () => Date } = {}) {
   })
 
   app.delete('/admin/players/:id', async (c) => {
-    await archivePlayer(c.env.DB, c.req.param('id'))
+    await archivePlayerInGame(c.env.DB, c.req.param('id'))
     return c.body(null, 204)
   })
 

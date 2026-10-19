@@ -215,7 +215,7 @@ describe('pagamentos', () => {
     expect(box.disabled).toBe(false)
   })
 
-  it.each([404, 500])('falha %i mantém a caixa como estava e mostra alerta', async (status) => {
+  it.each([500])('falha %i mantém a caixa como estava e mostra alerta', async (status) => {
     setup(authed({ 'PUT /api/admin/game/paid': { status, body: { error: 'x' } } }))
     const box = await pagou('Ana')
     fireEvent.click(box)
@@ -223,6 +223,17 @@ describe('pagamentos', () => {
     expect(box.checked).toBe(false)
     expect(box.disabled).toBe(false)
     expect(screen.getByText('0 de 2 pagaram')).toBeTruthy()
+  })
+})
+
+describe('jogo finalizado em outra aba', () => {
+  it('404 ao pagar recarrega os dados e avisa que o jogo mudou', async () => {
+    const f = setup(authed({ 'PUT /api/admin/game/paid': { status: 404, body: { error: 'Não há jogo ativo' } } }))
+    const box = await pagou('Ana')
+    expect(calls(f, 'GET /api/admin/game')).toHaveLength(1)
+    fireEvent.click(box)
+    expect((await screen.findByRole('alert')).textContent).toBe('O jogo mudou. A página foi atualizada.')
+    await waitFor(() => expect(calls(f, 'GET /api/admin/game')).toHaveLength(2))
   })
 })
 

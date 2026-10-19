@@ -52,9 +52,14 @@ export async function listPlayers(
 ): Promise<Player[]> {
   const where = opts.includeArchived ? '' : 'WHERE archived = 0'
   const { results } = await db
-    .prepare(`SELECT id, name, rating, archived FROM players ${where} ORDER BY LOWER(name), name`)
+    .prepare(`SELECT id, name, rating, archived FROM players ${where}`)
     .all<Row>()
-  return results.map(toPlayer)
+  return results
+    .map(toPlayer)
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }) || a.id.localeCompare(b.id),
+    )
 }
 
 export async function updatePlayer(

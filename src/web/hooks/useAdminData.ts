@@ -4,7 +4,7 @@ import type { Game, Player } from '../../shared/types'
 
 export type AdminStatus = 'loading' | 'ready' | 'unauthorized' | 'error'
 
-/** Estado compartilhado do painel. A Task 16 acrescenta o que faltar (sorteio) aqui. */
+/** Estado compartilhado do painel (jogo com sorteio, configurações e jogadores), carregado junto. */
 export function useAdminData(): {
   status: AdminStatus
   game: Game | null

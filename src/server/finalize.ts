@@ -1,8 +1,8 @@
 import { isGameExpired } from '../shared/dates'
-import type { DrawState } from '../shared/types'
+import { safeParseDraw } from './draw-json'
+import { listPlayers } from './players'
 
 type GameRow = { id: string; date: string; draw_json: string | null; team_count: number; team_size: number }
-type PlayerRow = { id: string; name: string; rating: number; archived: number }
 
 // Finaliza o jogo ativo se a data já passou (America/Sao_Paulo).
 // Devolve true só para o chamador cujo INSERT em history gravou a linha.
@@ -12,12 +12,10 @@ export async function finalizeIfExpired(db: D1Database, now: Date): Promise<bool
     .first<GameRow>()
   if (!game || !isGameExpired(game.date, now)) return false
 
-  const draw = game.draw_json ? (JSON.parse(game.draw_json) as DrawState) : null
+  const draw = safeParseDraw(game.draw_json)
   const inDraw = new Set<string>([...(draw?.teams.flat() ?? []), ...(draw?.reserves ?? [])])
 
-  const { results: players } = await db
-    .prepare('SELECT id, name, rating, archived FROM players ORDER BY LOWER(name), name')
-    .all<PlayerRow>()
+  const players = await listPlayers(db, { includeArchived: true })
   const { results: paidRows } = await db
     .prepare('SELECT player_id FROM game_paid WHERE game_id = ?')
     .bind(game.id)
@@ -33,7 +31,7 @@ export async function finalizeIfExpired(db: D1Database, now: Date): Promise<bool
       teamSize: draw?.teamSize ?? game.team_size,
     },
     players: players
-      .filter((p) => p.archived === 0 || inDraw.has(p.id))
+      .filter((p) => !p.archived || inDraw.has(p.id))
       .map((p) => ({ id: p.id, name: p.name, rating: p.rating, paid: paid.has(p.id) })),
     teams: draw?.teams ?? [],
     reserves: draw?.reserves ?? [],

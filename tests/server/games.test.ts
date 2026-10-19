@@ -3,6 +3,7 @@ import { createTestDb } from '../helpers/testDb'
 import { NotFoundError, ValidationError } from '../../src/server/errors'
 import { createPlayer } from '../../src/server/players'
 import {
+  archivePlayerInGame,
   createGame,
   deleteActiveGame,
   getActiveGame,
@@ -246,5 +247,43 @@ describe('games', () => {
       expect(result).toBeInstanceOf(ValidationError)
       expect(g.paid.sort()).toEqual([a.id, b.id].sort())
     })
+  })
+
+  it('archivePlayerInGame removes the player from paid, teams, reserves and locks', async () => {
+    const { db, a, b, c } = await setup()
+    for (const p of [a, b, c]) await setPaid(db, p.id, true)
+    await saveDraw(db, {
+      teamCount: 2,
+      teamSize: 1,
+      teams: [[a.id], [b.id]],
+      reserves: [c.id],
+      locks: { [a.id]: 0, [c.id]: 1 },
+    })
+    await archivePlayerInGame(db, a.id)
+    await archivePlayerInGame(db, c.id)
+    const g = await getActiveGame(db)
+    expect(g?.paid).toEqual([b.id])
+    expect(g?.draw?.teams).toEqual([[], [b.id]])
+    expect(g?.draw?.reserves).toEqual([])
+    expect(g?.draw?.locks).toEqual({})
+    const { results } = await db.prepare('SELECT id FROM players WHERE archived = 1 ORDER BY name').all()
+    expect(results).toHaveLength(2)
+  })
+
+  it('archivePlayerInGame works with no active game and still 404s unknown players', async () => {
+    const db = createTestDb()
+    const a = await createPlayer(db, { name: 'Ana', rating: 3 })
+    await archivePlayerInGame(db, a.id)
+    const row = await db.prepare('SELECT archived FROM players WHERE id = ?').bind(a.id).first<{ archived: number }>()
+    expect(row?.archived).toBe(1)
+    await expect(archivePlayerInGame(db, 'nope')).rejects.toThrow(NotFoundError)
+  })
+
+  it('a corrupt draw_json yields a game with draw null instead of throwing', async () => {
+    const { db, game } = await setup()
+    await db.prepare('UPDATE games SET draw_json = ? WHERE id = ?').bind('{not json', game.id).run()
+    expect(await getActiveGame(db)).toMatchObject({ id: game.id, draw: null })
+    await db.prepare('UPDATE games SET draw_json = ? WHERE id = ?').bind('{"teams":1}', game.id).run()
+    expect((await getActiveGame(db))?.draw).toBeNull()
   })
 })

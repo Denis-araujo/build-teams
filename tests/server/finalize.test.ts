@@ -120,4 +120,23 @@ describe('finalizeIfExpired', () => {
     expect(await getActiveGame(db)).toMatchObject({ id: next.id, paid: [a.id] })
     expect(await historyRows(db)).toHaveLength(1)
   })
+
+  it('lists snapshot players in pt-BR order', async () => {
+    const db = createTestDb()
+    for (const name of ['Zeca', 'Álvaro', 'Bia', 'érica', 'André'])
+      await createPlayer(db, { name, rating: 3 })
+    await createGame(db, '2026-10-19', created)
+    expect(await finalizeIfExpired(db, expired)).toBe(true)
+    const snap = JSON.parse((await historyRows(db))[0]!.snapshot_json) as Snapshot
+    expect(snap.players.map((p) => p.name)).toEqual(['Álvaro', 'André', 'Bia', 'érica', 'Zeca'])
+  })
+
+  it('finalizes a game with a corrupt draw_json without throwing', async () => {
+    const { db } = await setup(false)
+    await db.prepare("UPDATE games SET draw_json = '{not json' WHERE state = 'active'").run()
+    expect(await finalizeIfExpired(db, expired)).toBe(true)
+    const snap = JSON.parse((await historyRows(db))[0]!.snapshot_json) as Snapshot
+    expect(snap.teams).toEqual([])
+    expect(snap.reserves).toEqual([])
+  })
 })

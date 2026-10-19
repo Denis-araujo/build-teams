@@ -13,6 +13,8 @@ type Props = {
   game: Game | null
   players: Player[]
   onGameChange(game: Game | null): void
+  /** Chamado quando o servidor diz que o jogo sumiu (404): a página recarrega os dados. */
+  onStale?(): void
   onUnauthorized(): void
 }
 
@@ -24,7 +26,7 @@ const LOCK_OFF =
 
 const DEFAULTS = { teamCount: 2, teamSize: 6 }
 
-export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props) {
+export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +62,10 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
     } catch (e) {
       pendingFocus.current = null
       if (e instanceof UnauthorizedError) onUnauthorized()
+      else if (e instanceof HttpError && e.status === 404) {
+        onStale?.()
+        setError('O jogo mudou. A página foi atualizada.')
+      }
       else setError(e instanceof HttpError && e.serverMessage ? e.serverMessage : 'Não foi possível salvar o sorteio. Tente de novo.')
     } finally {
       inFlight.current = false

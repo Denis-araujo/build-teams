@@ -8,6 +8,8 @@ type Props = {
   game: Game | null
   onPlayersChange(players: Player[]): void
   onGameChange(game: Game | null): void
+  /** Chamado quando o servidor diz que o jogo sumiu (404): a página recarrega os dados. */
+  onStale?(): void
   onUnauthorized: () => void
 }
 
@@ -94,7 +96,7 @@ function PlayerRow(props: {
   )
 }
 
-export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized }: Props) {
+export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized, onStale }: Props) {
   const [name, setName] = useState('')
   const [rating, setRating] = useState(DEFAULT_RATING)
   const [adding, setAdding] = useState(false)
@@ -186,6 +188,11 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     try {
       onGameChange(await api.setPaid(id, paid))
     } catch (err) {
+      if (err instanceof HttpError && err.status === 404) {
+        onStale?.()
+        setError('O jogo mudou. A página foi atualizada.')
+        return
+      }
       const who = latest.current.find((p) => p.id === id)?.name
       fail(err, 'Não foi possível salvar o pagamento. Tente de novo.', { who, useServerMessage: false })
     } finally {
