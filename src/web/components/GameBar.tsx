@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
-import { formatGameDate } from '../format'
 import { todayInBrasilia } from '../../shared/dates'
 import type { Game } from '../../shared/types'
+import { GameCard } from './GameCard'
+
+const TRASH_PATH =
+  'M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z'
 
 type Props = {
   game: Game | null
@@ -52,37 +55,37 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
   }
 
   return (
-    <section className="admin-card" aria-label="Jogo">
-      <p style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>
-        {game ? formatGameDate(game.date) : 'Nenhum jogo marcado'}
-      </p>
-      <form onSubmit={submit}>
-        <div className="form-row">
-          <label className="field">
-            Data do jogo
-            <input
-              className="input"
-              type="date"
-              min={todayInBrasilia(new Date())}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </label>
+    <GameCard date={game?.date ?? null}>
+      <form className="flex flex-wrap items-end gap-[10px]" onSubmit={submit}>
+        <label className="flex flex-col gap-[6px] text-[13px] text-neutral-400">
+          Data do jogo
+          <input
+            className="input box-border w-full border border-line bg-bg text-text"
+            type="date"
+            min={todayInBrasilia(new Date())}
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </label>
+        <div className="flex gap-[6px]">
           <button className="btn btn-primary" type="submit" disabled={busy || !date}>
             {game ? 'Alterar data' : 'Cadastrar jogo'}
           </button>
           {game && (
-            <button className="btn btn-ghost" type="button" disabled={busy} onClick={remove}>
+            <button className="btn btn-ghost gap-[6px]" type="button" disabled={busy} onClick={remove}>
+              <svg viewBox="0 0 256 256" width="14" height="14" aria-hidden="true">
+                <path fill="currentColor" d={TRASH_PATH} />
+              </svg>
               Excluir jogo
             </button>
           )}
         </div>
         {error && (
-          <p className="form-error" role="alert" style={{ marginTop: 8 }}>
+          <p className="m-0 basis-full text-[13px] text-gold-ink" role="alert">
             {error}
           </p>
         )}
       </form>
-    </section>
+    </GameCard>
   )
 }

@@ -17,6 +17,22 @@ type Props = {
 const STAR_PATH =
   'M234.29,114.85l-45,38.83L203,211.75a16.4,16.4,0,0,1-24.5,17.82L128,198.49,77.47,229.57A16.4,16.4,0,0,1,53,211.75l13.76-58.07-45-38.83A16.46,16.46,0,0,1,31.08,86l59-4.76,22.76-55.08a16.36,16.36,0,0,1,30.27,0l22.75,55.08,59,4.76a16.46,16.46,0,0,1,9.37,28.86Z'
 
+/** Pílula de nota da linha do jogador (compartilhada com a visão do Membro). */
+export function RatingPill({ rating }: { rating: number }) {
+  return (
+    <span
+      role="img"
+      aria-label={`${fmt(rating)} estrelas`}
+      className="order-2 flex min-w-[44px] flex-none items-center justify-end gap-[3px] rounded-full bg-gold-tint px-[7px] py-[2px] text-xs font-medium text-gold-ink tabular-nums"
+    >
+      <svg viewBox="0 0 256 256" width="11" height="11" aria-hidden="true" className="text-gold">
+        <path fill="currentColor" d={STAR_PATH} />
+      </svg>
+      {fmt(rating)}
+    </span>
+  )
+}
+
 export function TeamCards({ teams, playersById, renderRowExtras, rowProps, cardProps }: Props) {
   const ratings = new Map([...playersById].map(([id, p]) => [id, p.rating]))
   const totals = teamTotals(teams, ratings)
@@ -75,18 +91,7 @@ export function TeamCards({ teams, playersById, renderRowExtras, rowProps, cardP
                     >
                       <span className="w-4 flex-none text-xs text-neutral-500 tabular-nums">{n + 1}</span>
                       <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                      {typeof p.rating === 'number' && (
-                        <span
-                          role="img"
-                          aria-label={`${fmt(p.rating)} estrelas`}
-                          className="order-2 flex min-w-[44px] flex-none items-center justify-end gap-[3px] rounded-full bg-gold-tint px-[7px] py-[2px] text-xs font-medium text-gold-ink tabular-nums"
-                        >
-                          <svg viewBox="0 0 256 256" width="11" height="11" aria-hidden="true" className="text-gold">
-                            <path fill="currentColor" d={STAR_PATH} />
-                          </svg>
-                          {fmt(p.rating)}
-                        </span>
-                      )}
+                      {typeof p.rating === 'number' && <RatingPill rating={p.rating} />}
                       {renderRowExtras?.(ctx)}
                     </li>
                   )
