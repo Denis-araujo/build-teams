@@ -86,6 +86,8 @@ export const api = {
     request<void>(`/api/admin/players/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   setPaid: (playerId: string, paid: boolean) =>
     request<Game>('/api/admin/game/paid', { method: 'PUT', body: JSON.stringify({ playerId, paid }) }),
+  setAllPaid: (paid: boolean) =>
+    request<Game>('/api/admin/game/paid-all', { method: 'PUT', body: JSON.stringify({ paid }) }),
   saveDraw: (state: DrawState) =>
     request<Game>('/api/admin/game/draw', { method: 'PUT', body: JSON.stringify(state) }),
 }

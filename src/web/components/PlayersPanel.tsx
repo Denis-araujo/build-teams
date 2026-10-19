@@ -106,6 +106,10 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   const inFlight = useRef(new Set<string>())
+  const [bulk, setBulk] = useState(false)
+  const bulkBusy = useRef(false)
+  const [confirmingClear, setConfirmingClear] = useState(false)
+  const clearBtn = useRef<HTMLButtonElement>(null)
   // Sempre a lista mais recente, para que respostas tardias não apliquem sobre uma lista velha.
   const latest = useRef(players)
   latest.current = players
@@ -183,8 +187,36 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     }
   }
 
+  async function setAll(paid: boolean) {
+    if (bulkBusy.current || inFlight.current.size > 0) return
+    bulkBusy.current = true
+    setBulk(true)
+    setConfirmingClear(false)
+    setError(null)
+    try {
+      onGameChange(await api.setAllPaid(paid))
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 404) {
+        onStale?.()
+        setError('O jogo mudou. A página foi atualizada.')
+        return
+      }
+      fail(err, 'Não foi possível salvar os pagamentos. Tente de novo.')
+    } finally {
+      bulkBusy.current = false
+      setBulk(false)
+    }
+  }
+
+  function clearAll() {
+    // Só pede confirmação quando o sorteio guardado tem alguém alocado.
+    const hasDraw = !!game?.draw && game.draw.teams.some((t) => t.length > 0)
+    if (hasDraw) setConfirmingClear(true)
+    else void setAll(false)
+  }
+
   async function togglePaid(id: string, paid: boolean) {
-    if (inFlight.current.has(id)) return
+    if (bulkBusy.current || inFlight.current.has(id)) return
     inFlight.current.add(id)
     setPending(new Set(inFlight.current))
     setError(null)
@@ -247,9 +279,57 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
             </button>
           </div>
           <span className="text-[12px] text-neutral-400 text-pretty">
-            Dê de 1 a 5 estrelas — clique na metade esquerda da estrela para meia.
+            Clique na metade esquerda de uma estrela para dar meia.
           </span>
         </form>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] tracking-[0.06em] uppercase text-neutral-500">Quem vai jogar</span>
+          <div className="flex gap-0.5">
+            <button
+              type="button"
+              className="btn btn-ghost text-[12px] px-2 py-1"
+              disabled={!game || bulk || pending.size > 0}
+              aria-busy={bulk || undefined}
+              title={game ? undefined : 'Cadastre a data do jogo primeiro'}
+              onClick={() => void setAll(true)}
+            >
+              Marcar todos
+            </button>
+            <button
+              ref={clearBtn}
+              type="button"
+              className="btn btn-ghost text-[12px] px-2 py-1"
+              disabled={!game || bulk || pending.size > 0}
+              aria-busy={bulk || undefined}
+              title={game ? undefined : 'Cadastre a data do jogo primeiro'}
+              onClick={clearAll}
+            >
+              Limpar
+            </button>
+          </div>
+        </div>
+
+        {confirmingClear && (
+          <div role="group" aria-label="Confirmar limpeza" className="flex items-center justify-between gap-2 px-3 py-2 rounded-sm bg-gold-tint text-gold-ink text-[13px] shadow-[inset_0_0_0_1px_var(--gold-soft)]">
+            <span>O sorteio será apagado.</span>
+            <div className="flex gap-0.5">
+              <button
+                type="button"
+                className="btn btn-ghost text-[12px] px-2 py-1"
+                onClick={() => {
+                  setConfirmingClear(false)
+                  clearBtn.current?.focus()
+                }}
+              >
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-ghost text-[12px] px-2 py-1" onClick={() => void setAll(false)}>
+                Limpar
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="m-0 px-3 py-2 rounded-sm bg-gold-tint text-gold-ink text-[13px] shadow-[inset_0_0_0_1px_var(--gold-soft)]" role="alert">
@@ -265,7 +345,7 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
             player={p}
             paid={paidSet.has(p.id)}
             hasGame={game !== null}
-            pending={pending.has(p.id)}
+            pending={pending.has(p.id) || bulk}
             onTogglePaid={(paid) => void togglePaid(p.id, paid)}
             onRename={(n) => update(p.id, { name: n })}
             onRate={(r) => void update(p.id, { rating: r })}

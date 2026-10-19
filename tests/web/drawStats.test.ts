@@ -69,3 +69,28 @@ it('fmt usa vírgula e omite zero final', () => {
   expect(fmt(7)).toBe('7')
   expect(fmt(7.5)).toBe('7,5')
 })
+
+describe('nota 0,5', () => {
+  const H = new Map([['a', 0.5], ['b', 0.5], ['c', 1], ['d', 0.5]])
+  it('totais e médias com 0,5 não dão NaN nem 0', () => {
+    expect(teamTotals([['a', 'b'], ['c', 'd']], H)).toEqual([1, 1.5])
+    expect(teamAverage(['a'], H)).toBe(0.5)
+    expect(teamAverage(['a', 'c'], H)).toBe(0.75)
+    expect(fmt(teamAverage(['a'], H))).toBe('0,5')
+    expect(fmt(teamTotals([['a']], H)[0])).toBe('0,5')
+  })
+  it('spreadOf em passos de 0,5', () => {
+    expect(spreadOf([['a', 'b'], ['c', 'd']], H)).toBe(0.5)
+    expect(spreadOf([['a'], ['c', 'd']], H)).toBe(0.25)
+  })
+  it('balanceTag com spread de 0,5 em tamanhos iguais é Equilibrado', () => {
+    const eq = { allowHalf: true, sizesEqual: true, avgSize: 2 }
+    expect(balanceTag(spreadOf([['a', 'b'], ['c', 'd']], H), eq).label).toBe('Equilibrado')
+    expect(balanceTag(1, eq).label).toBe('Quase parelho')
+  })
+})
+
+it('fmt(0.5) mostra 0,5', () => {
+  expect(fmt(0.5)).toBe('0,5')
+  expect(fmt(0.25 + 0.25)).toBe('0,5')
+})

@@ -60,7 +60,7 @@ export function StarRating(props: {
     >
       {[1, 2, 3, 4, 5].map((n) => {
         const fill = Math.min(1, Math.max(0, value - (n - 1)))
-        const half = Math.max(1, n - 0.5)
+        const half = n - 0.5
         return (
           <div key={n} className={`relative ${dim.box}`}>
             <Star size={px} className={`absolute inset-0 text-gold-empty ${dim.svg}`} />

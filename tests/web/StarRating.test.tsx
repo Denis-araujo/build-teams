@@ -11,7 +11,7 @@ it('somente leitura: sem botões e com aria-label', () => {
   expect(document.querySelectorAll('button')).toHaveLength(0)
 })
 
-it('com onChange: metade esquerda = n - 0,5 (mínimo 1), direita = n', () => {
+it('com onChange: metade esquerda = n - 0,5, direita = n', () => {
   const onChange = vi.fn()
   render(<StarRating value={0} onChange={onChange} />)
   expect(document.querySelectorAll('button')).toHaveLength(10)
@@ -19,7 +19,7 @@ it('com onChange: metade esquerda = n - 0,5 (mínimo 1), direita = n', () => {
   fireEvent.click(btns[0]) // esquerda da 1ª
   fireEvent.click(btns[2]) // esquerda da 2ª
   fireEvent.click(btns[9]) // direita da 5ª
-  expect(onChange.mock.calls.map((c) => c[0])).toEqual([1, 1.5, 5])
+  expect(onChange.mock.calls.map((c) => c[0])).toEqual([0.5, 1.5, 5])
 })
 
 it('3ª estrela: metade esquerda = 2,5 e direita = 3, com aria-label por metade', () => {
@@ -30,12 +30,26 @@ it('3ª estrela: metade esquerda = 2,5 e direita = 3, com aria-label por metade'
   expect(onChange.mock.calls.map((c) => c[0])).toEqual([2.5, 3])
 })
 
-it('1ª estrela: metade esquerda nunca devolve menos que 1', () => {
+it('1ª estrela: metade esquerda dá 0,5 e a direita dá 1', () => {
   const onChange = vi.fn()
   render(<StarRating value={3} onChange={onChange} />)
-  const first = document.querySelectorAll('button')[0]
-  fireEvent.click(first)
-  expect(onChange).toHaveBeenCalledWith(1)
+  fireEvent.click(screen.getByRole('button', { name: '0,5 estrelas' }))
+  fireEvent.click(screen.getByRole('button', { name: '1 estrela' }))
+  expect(onChange.mock.calls.map((c) => c[0])).toEqual([0.5, 1])
+})
+
+it('3ª estrela: metade esquerda dá 2,5', () => {
+  const onChange = vi.fn()
+  render(<StarRating value={3} onChange={onChange} />)
+  fireEvent.click(document.querySelectorAll('button')[4])
+  expect(onChange).toHaveBeenCalledWith(2.5)
+})
+
+it('nota 0,5 preenche metade da 1ª estrela e nada nas demais', () => {
+  render(<StarRating value={0.5} />)
+  expect(screen.getByRole('img', { name: '0,5 estrelas' })).toBeTruthy()
+  const layers = Array.from(document.querySelectorAll<HTMLElement>('div[style]')).map((d) => d.style.width)
+  expect(layers).toEqual(['50%', '0%', '0%', '0%', '0%'])
 })
 
 it('botões de acerto têm estilo de foco visível', () => {
