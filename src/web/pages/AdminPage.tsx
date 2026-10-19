@@ -39,8 +39,7 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
         {data.status === 'ready' && (
           <>
             <GameBar game={data.game} setGame={data.setGame} onUnauthorized={onLoggedOut} />
-            <SettingsToggle settings={data.settings} setSettings={data.setSettings} onUnauthorized={onLoggedOut} />
-            <section aria-label="Jogadores e sorteio" className="admin-columns">
+            <section aria-label="Jogadores e sorteio" className="flex flex-wrap gap-[24px] items-start">
               <PlayersPanel
                 players={data.players}
                 game={data.game}
@@ -48,6 +47,9 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 onGameChange={data.setGame}
                 onUnauthorized={onLoggedOut}
                 onStale={() => void data.reload()}
+                footer={
+                  <SettingsToggle settings={data.settings} setSettings={data.setSettings} onUnauthorized={onLoggedOut} />
+                }
               />
               <DrawArea
                 game={data.game}

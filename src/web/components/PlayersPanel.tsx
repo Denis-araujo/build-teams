@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import type { Game, Player } from '../../shared/types'
 import { formatRating, StarRating } from './StarRating'
@@ -11,6 +11,8 @@ type Props = {
   /** Chamado quando o servidor diz que o jogo sumiu (404): a página recarrega os dados. */
   onStale?(): void
   onUnauthorized: () => void
+  /** Rodapé do card (ex.: a configuração "Membro vê as estrelas"). */
+  footer?: ReactNode
 }
 
 const DEFAULT_RATING = 3
@@ -54,9 +56,11 @@ function PlayerRow(props: {
   }
 
   return (
-    <div className="player-row" data-testid={`player-${player.id}`}>
+    <div className={`flex items-center gap-[10px] px-[10px] py-[6px] rounded-sm hover:bg-bg ${paid ? 'opacity-100' : 'opacity-[0.45]'}`}
+      data-testid={`player-${player.id}`}>
       <input
         type="checkbox"
+        className="size-4 accent-[var(--navy)] cursor-pointer m-0 flex-none disabled:cursor-not-allowed"
         aria-label={`Pagou: ${player.name}`}
         checked={paid}
         disabled={!hasGame || pending}
@@ -64,7 +68,7 @@ function PlayerRow(props: {
         onChange={(e) => onTogglePaid(e.target.checked)}
       />
       <input
-        className="player-name"
+        className="flex-1 min-w-0 bg-transparent border-0 text-text text-[14px] py-1 px-0 font-[inherit]"
         aria-label={`Nome de ${player.name}`}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -75,17 +79,16 @@ function PlayerRow(props: {
         }}
       />
       <StarRating value={player.rating} onChange={onRate} size={18} />
-      <span style={{ minWidth: 28, textAlign: 'right', fontSize: 13, color: 'var(--gold-ink)', fontVariantNumeric: 'tabular-nums' }}>
+      <span className="w-[26px] text-right text-[13px] font-medium text-gold-ink tabular-nums flex-none">
         {formatRating(player.rating)}
       </span>
       <button
         type="button"
-        className="btn btn-ghost btn-icon"
+        className="btn btn-ghost btn-icon w-[26px] h-[26px] text-neutral-500 flex-none"
         aria-label={`Remover ${player.name}`}
         onClick={onRemove}
-        style={{ width: 28, height: 28, color: 'var(--color-neutral-500)' }}
       >
-        <svg viewBox="0 0 256 256" width="14" height="14" aria-hidden="true">
+        <svg viewBox="0 0 256 256" width="13" height="13" aria-hidden="true">
           <path
             fill="currentColor"
             d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"
@@ -96,7 +99,7 @@ function PlayerRow(props: {
   )
 }
 
-export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized, onStale }: Props) {
+export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized, onStale, footer }: Props) {
   const [name, setName] = useState('')
   const [rating, setRating] = useState(DEFAULT_RATING)
   const [adding, setAdding] = useState(false)
@@ -205,53 +208,51 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
   const paidCount = players.filter((p) => paidSet.has(p.id)).length
 
   return (
-    <section className="players-panel" aria-label="Jogadores">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>Jogadores</h1>
-        <p style={{ margin: 0, fontSize: 14, color: 'var(--color-neutral-400)' }}>
-          Dê de 1 a 5 estrelas — clique na metade esquerda da estrela para meia.
-        </p>
-      </div>
-
-      <form
-        aria-label="Novo jogador"
-        onSubmit={(e) => void add(e)}
-        className="admin-card"
-        style={{ gap: 10, padding: 14 }}
-      >
-        <div style={{ display: 'flex', gap: 8 }}>
-          <label className="field" style={{ flex: 1, minWidth: 0 }}>
-            Nome do jogador
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <button
-            className="btn btn-primary"
-            type="submit"
-            disabled={adding || !name.trim()}
-            style={{ alignSelf: 'flex-end' }}
-          >
-            Adicionar
-          </button>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <StarRating value={rating} onChange={setRating} size={22} />
-          <span style={{ fontSize: 14, color: 'var(--gold-ink)', fontVariantNumeric: 'tabular-nums' }}>
-            {formatRating(rating)}
+    <section
+      aria-label="Jogadores"
+      className="flex-[1_1_320px] max-w-[400px] min-w-0 flex flex-col bg-surface rounded-lg shadow-sm overflow-hidden"
+    >
+      <div className="pt-[18px] px-[18px] pb-[14px] flex flex-col gap-[14px]">
+        <div className="flex items-baseline justify-between gap-2">
+          <h1 className="m-0 text-[20px] font-medium tracking-[-0.01em]">Jogadores</h1>
+          <span className="text-[13px] text-neutral-400 tabular-nums">
+            {paidCount} de {players.length} pagaram
           </span>
         </div>
-      </form>
 
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+        <form
+          aria-label="Novo jogador"
+          onSubmit={(e) => void add(e)}
+          className="flex flex-col gap-[10px] p-3 rounded-md bg-bg"
+        >
+          <label className="flex flex-col gap-1 text-[12px] text-neutral-500">
+            Nome do jogador
+            <input className="input w-full box-border bg-surface" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <div className="flex items-center justify-between gap-[10px]">
+            <div className="flex items-center gap-2">
+              <StarRating value={rating} onChange={setRating} size={22} />
+              <span className="text-[14px] font-medium text-gold-ink tabular-nums min-w-[24px]">
+                {formatRating(rating)}
+              </span>
+            </div>
+            <button className="btn btn-primary gap-[6px]" type="submit" disabled={adding || !name.trim()}>
+              Adicionar
+            </button>
+          </div>
+          <span className="text-[12px] text-neutral-400 text-pretty">
+            Dê de 1 a 5 estrelas — clique na metade esquerda da estrela para meia.
+          </span>
+        </form>
 
-      <span style={{ fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-neutral-500)' }}>
-        {paidCount} de {players.length} pagaram
-      </span>
+        {error && (
+          <p className="m-0 px-3 py-2 rounded-sm bg-gold-tint text-gold-ink text-[13px] shadow-[inset_0_0_0_1px_var(--gold-soft)]" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
 
-      <div className="player-list">
+      <div className="flex flex-col px-2 pb-2">
         {players.map((p) => (
           <PlayerRow
             key={p.id}
@@ -266,6 +267,7 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
           />
         ))}
       </div>
+      {footer}
     </section>
   )
 }
