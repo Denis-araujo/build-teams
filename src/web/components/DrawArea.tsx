@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type DragEvent } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import { drawTeams } from '../../shared/draw'
-import type { Game, Player } from '../../shared/types'
+import type { DrawState, Game, Player } from '../../shared/types'
 import { averageSize, balanceTag, fmt, outsideCount, sizesEqual, spreadOf } from '../lib/drawStats'
+import { canMoveToTeam, moveToReserves, moveToTeam, sanitizeLocks, swapPlayers, teamLetter, toggleLock } from '../lib/drawEdit'
+import { CopyBar } from './CopyBar'
 import { DrawModal } from './DrawModal'
 import { ReservesBar } from './ReservesBar'
 import { TeamCards } from './TeamCards'
@@ -14,12 +16,20 @@ type Props = {
   onUnauthorized(): void
 }
 
+const HIGHLIGHT = '0 0 0 1px var(--color-accent), 0 0 24px var(--color-accent-800)'
+const LOCK_ON =
+  'M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'
+const LOCK_OFF =
+  'M208,80H96V56a32,32,0,0,1,32-32c15.37,0,29.2,11,32.16,25.59a8,8,0,0,0,15.68-3.18C171.32,24.15,151.2,8,128,8A48.05,48.05,0,0,0,80,56V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm0,128H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'
+
 const DEFAULTS = { teamCount: 2, teamSize: 6 }
 
 export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [over, setOver] = useState<number | 'reserves' | null>(null)
   const inFlight = useRef(false)
 
   const draw = game?.draw ?? null
@@ -33,22 +43,14 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
   )
   const lockedCount = Object.keys(survivingLocks).length
 
-  async function runDraw(cfg: { teamCount: number; teamSize: number }) {
+  /** Toda mudança passa por aqui: sanear travas, salvar e só então mostrar o que o servidor devolveu. */
+  async function persist(build: () => DrawState) {
     if (!game || inFlight.current) return
     inFlight.current = true
     setBusy(true)
     setError(null)
     try {
-      const locks = Object.fromEntries(Object.entries(survivingLocks).filter(([, idx]) => idx < cfg.teamCount))
-      const { teams, reserves } = drawTeams({
-        players: paidPlayers.map((p) => ({ id: p.id, rating: p.rating })),
-        teamCount: cfg.teamCount,
-        teamSize: cfg.teamSize,
-        locks,
-        previousReserves: draw?.reserves ?? [],
-      })
-      // A tela só mostra o que o servidor aceitou.
-      onGameChange(await api.saveDraw({ ...cfg, teams, reserves, locks }))
+      onGameChange(await api.saveDraw(sanitizeLocks(build())))
     } catch (e) {
       if (e instanceof UnauthorizedError) onUnauthorized()
       else setError(e instanceof HttpError && e.serverMessage ? e.serverMessage : 'Não foi possível salvar o sorteio. Tente de novo.')
@@ -58,7 +60,117 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
     }
   }
 
+  function runDraw(cfg: { teamCount: number; teamSize: number }) {
+    return persist(() => {
+      const locks = Object.fromEntries(Object.entries(survivingLocks).filter(([, idx]) => idx < cfg.teamCount))
+      const { teams, reserves } = drawTeams({
+        players: paidPlayers.map((p) => ({ id: p.id, rating: p.rating })),
+        teamCount: cfg.teamCount,
+        teamSize: cfg.teamSize,
+        locks,
+        previousReserves: draw?.reserves ?? [],
+      })
+      return { ...cfg, teams, reserves, locks }
+    })
+  }
+
+  const locationOf = (id: string) => draw?.teams.findIndex((t) => t.includes(id)) ?? -1
+
+  function moveTo(id: string, target: number | 'reserves') {
+    if (!draw || inFlight.current) return
+    if (target === 'reserves') {
+      if (draw.reserves.includes(id)) return
+      void persist(() => moveToReserves(draw, id))
+      return
+    }
+    if (locationOf(id) === target) return
+    const check = canMoveToTeam(draw, id, target)
+    if (!check.ok) {
+      setError(check.reason)
+      return
+    }
+    void persist(() => moveToTeam(draw, id, target))
+  }
+
+  function swap(a: string, b: string) {
+    if (!draw || inFlight.current || a === b) return
+    if (locationOf(a) < 0 && locationOf(b) < 0) return
+    void persist(() => swapPlayers(draw, a, b))
+  }
+
+  const draggedId = (e: DragEvent) => dragId ?? e.dataTransfer?.getData('text/plain') ?? null
+  const endDrag = () => {
+    setDragId(null)
+    setOver(null)
+  }
+  const dragStart = (id: string) => (e: DragEvent) => {
+    if (busy) return
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+    setDragId(id)
+  }
+  const dropTarget = (target: number | 'reserves') => ({
+    onDragOver: (e: DragEvent) => {
+      if (!dragId || busy) return
+      e.preventDefault()
+      if (over !== target) setOver(target)
+    },
+    onDragLeave: (e: DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver((o) => (o === target ? null : o))
+    },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      const id = draggedId(e)
+      endDrag()
+      if (id) moveTo(id, target)
+    },
+    style: over === target ? { boxShadow: HIGHLIGHT } : undefined,
+  })
+  const rowDrop = (targetId: string) => ({
+    onDragOver: (e: DragEvent) => {
+      if (dragId && dragId !== targetId && !busy) e.preventDefault()
+    },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const id = draggedId(e)
+      endDrag()
+      if (id) swap(id, targetId)
+    },
+  })
+  const draggable = (id: string) => ({
+    draggable: !busy,
+    onDragStart: dragStart(id),
+    onDragEnd: endDrag,
+    ...rowDrop(id),
+  })
+
+  function moveSelect(p: Player, teamIndex: number) {
+    const current = teamIndex < 0 ? 'reserves' : String(teamIndex)
+    return (
+      <select
+        className="move-select"
+        aria-label={`Mover ${p.name} para`}
+        disabled={busy}
+        value={current}
+        onChange={(e) => moveTo(p.id, e.target.value === 'reserves' ? 'reserves' : Number(e.target.value))}
+      >
+        {draw!.teams.map((t, i) => {
+          const full = i !== teamIndex && t.length >= draw!.teamSize
+          return (
+            <option key={i} value={i} disabled={full}>
+              Time {teamLetter(i)}
+              {full ? ' (cheio)' : ''}
+            </option>
+          )
+        })}
+        <option value="reserves">Reservas</option>
+      </select>
+    )
+  }
+
   const hasTeams = !!draw
+  const hasPlaced = !!draw && [...draw.teams.flat(), ...draw.reserves].some((id) => playersById.has(id))
   const sameSizes = draw ? sizesEqual(draw.teams, ratings) : true
   const spread = draw ? spreadOf(draw.teams, ratings) : 0
   const tag = draw
@@ -68,7 +180,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
   const cannotDraw = busy || paidPlayers.length < config.teamCount
 
   return (
-    <section className="draw-area" aria-label="Times">
+    <section className="draw-area" aria-label="Times" aria-busy={busy}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16, justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>Times</h1>
@@ -128,8 +240,51 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
         </div>
       ) : (
         <>
-          <TeamCards teams={draw.teams} playersById={playersById} />
-          <ReservesBar reserves={draw.reserves} playersById={playersById} />
+          <TeamCards
+            teams={draw.teams}
+            playersById={playersById}
+            cardProps={(i) => dropTarget(i)}
+            rowProps={({ player }) => ({
+              ...draggable(player.id),
+              style: { flexWrap: 'wrap', opacity: dragId === player.id ? 0.5 : 1 },
+            })}
+            renderRowExtras={({ player, teamIndex }) => {
+              const locked = draw.locks[player.id] === teamIndex
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-pressed={locked}
+                    aria-label={locked ? `Destravar ${player.name}` : `Travar ${player.name} neste time`}
+                    disabled={busy}
+                    style={{ color: locked ? 'var(--gold-ink)' : 'var(--color-neutral-500)' }}
+                    onClick={() => void persist(() => toggleLock(draw, player.id))}
+                  >
+                    <svg viewBox="0 0 256 256" width="14" height="14" aria-hidden="true">
+                      <path fill="currentColor" d={locked ? LOCK_ON : LOCK_OFF} />
+                    </svg>
+                  </button>
+                  {moveSelect(player, teamIndex)}
+                </>
+              )
+            }}
+          />
+          <ReservesBar
+            reserves={draw.reserves}
+            playersById={playersById}
+            showEmpty={dragId !== null}
+            barProps={dropTarget('reserves')}
+            chipProps={(p) => ({ ...draggable(p.id), style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', opacity: dragId === p.id ? 0.5 : 1 } })}
+            renderChipExtras={(p) => moveSelect(p, -1)}
+          />
+          {game && hasPlaced && (
+            <CopyBar
+              date={game.date}
+              teams={draw.teams.map((t) => t.flatMap((id) => playersById.get(id) ?? []))}
+              reserves={draw.reserves.flatMap((id) => playersById.get(id) ?? [])}
+            />
+          )}
           {outside > 0 && (
             <p style={{ margin: 0, fontSize: 13, color: 'var(--gold-ink)' }}>
               {outside} {outside === 1 ? 'pagou e ficou' : 'pagaram e ficaram'} de fora — sorteie de novo para incluir.

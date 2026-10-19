@@ -7,22 +7,26 @@ type Props = {
   /** Ganchos para a Task 16b (soltar na barra, controles por reserva). */
   barProps?: HTMLAttributes<HTMLElement>
   renderChipExtras?: (player: Player) => ReactNode
+  chipProps?: (player: Player) => HTMLAttributes<HTMLLIElement>
+  /** Mostra a barra como alvo de soltar mesmo sem reservas (durante um arrasto). */
+  showEmpty?: boolean
 }
 
-export function ReservesBar({ reserves, playersById, barProps, renderChipExtras }: Props) {
+export function ReservesBar({ reserves, playersById, barProps, renderChipExtras, chipProps, showEmpty }: Props) {
   const members = reserves.flatMap((id) => {
     const p = playersById.get(id)
     return p ? [p] : []
   })
-  if (!members.length) return null
+  if (!members.length && !showEmpty) return null
   return (
     <section className="reserves" aria-label="Reservas" {...barProps}>
       <h2 style={{ margin: 0, fontSize: 12, fontWeight: 400, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-neutral-500)' }}>
         Reservas · {members.length}
       </h2>
+      {!members.length && <span style={{ fontSize: 14, color: 'var(--color-neutral-400)' }}>Solte aqui para mandar às reservas</span>}
       <ul className="plain-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {members.map((p) => (
-          <li key={p.id} className="chip">
+          <li key={p.id} className="chip" {...chipProps?.(p)}>
             {p.name}
             {renderChipExtras?.(p)}
           </li>
