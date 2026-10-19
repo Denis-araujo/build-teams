@@ -1,16 +1,8 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "resolveJsonModule": true,
-    "types": ["@cloudflare/workers-types", "vite/client"]
-  },
-  "include": ["src", "tests", "functions", "vite.config.ts", "vitest.config.ts"]
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.web.json" },
+    { "path": "./tsconfig.worker.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
 }
