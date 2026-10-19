@@ -44,7 +44,24 @@ npx wrangler d1 migrations apply montar-times --remote
 npx wrangler pages project create montar-times --production-branch main
 ```
 
-### 5. Definir os segredos
+### 5. Ligar o D1 ao projeto Pages
+
+Como o `wrangler.toml` tem `pages_build_output_dir`, o wrangler o trata como configuração do projeto Pages, e o bloco `[[d1_databases]]` (binding `DB`) deveria ser aplicado no deploy. **Não verificado numa conta real**: só foi testado localmente.
+
+Plano B (documentado): se o `/api/game` responder 500 com "DB" undefined/no such table, faça este passo no painel e refaça o deploy. No painel: projeto Pages `montar-times` > Settings > Functions > D1 database bindings > Add binding, com variável `DB` e banco `montar-times`, para o ambiente Production. Depois rode o passo 6 de novo.
+
+### 6. Build e primeiro deploy
+
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name montar-times --branch main
+```
+
+O comando imprime a URL (`https://montar-times.pages.dev` ou parecida). `--branch main` garante que seja o deploy de produção.
+
+Neste ponto os segredos ainda não existem, então `/api/admin/login` responde 503 "Servidor sem senha configurada". Isso é o esperado.
+
+### 7. Definir os segredos
 
 ```bash
 npx wrangler pages secret put ADMIN_PASSWORD --project-name montar-times
@@ -53,18 +70,13 @@ npx wrangler pages secret put SESSION_SECRET --project-name montar-times
 
 Cada comando pede o valor. Use uma senha de administrador forte e longa. Para o `SESSION_SECRET`, gere um valor aleatório com pelo menos 32 caracteres, por exemplo `openssl rand -hex 32`, e guarde-o em um gerenciador de senhas. Ele assina o cookie de sessão; quem o conhecer consegue forjar sessões de administrador.
 
-### 6. Ligar o D1 ao projeto Pages
-
-Como o `wrangler.toml` tem `pages_build_output_dir`, o wrangler o trata como configuração do projeto Pages e o bloco `[[d1_databases]]` (binding `DB`) é aplicado no deploy. Não é preciso configurar nada no painel; se o binding não aparecer, confira em Workers & Pages > montar-times > Settings > Bindings (ou Functions > D1 database bindings) e adicione `DB` apontando para o banco `montar-times`. Observação: com `wrangler.toml` presente, o painel passa a ser somente leitura para os bindings definidos no arquivo. Os segredos (passo 5) continuam sendo definidos por comando.
-
-### 7. Build e deploy
+Segredos só valem para deploys NOVOS. Rode o deploy mais uma vez:
 
 ```bash
-npm run build
-npx wrangler pages deploy dist --project-name montar-times
+npx wrangler pages deploy dist --project-name montar-times --branch main
 ```
 
-O comando imprime a URL (`https://montar-times.pages.dev` ou parecida). Como o ramo de produção é `main`, publique a partir do ramo `main` ou acrescente `--branch main` para que seja o deploy de produção.
+(Se a sua versão do wrangler aceitar definir segredos antes do primeiro deploy, dá para pular o segundo deploy, mas a ordem acima é a mais segura.)
 
 ## Verificação depois do deploy
 
@@ -94,9 +106,20 @@ curl -s https://<site>/api/game | grep -c rating   # deve imprimir 0
 
 Com a opção ligada, o mesmo comando imprime 1 (há um jogo ativo).
 
-Também vale conferir que 6 tentativas seguidas de senha errada fazem o login responder 429.
+O `grep -c` conta linhas e funciona porque o JSON da API vem em uma linha só. Alternativa mais robusta: `curl -s https://<site>/api/game | grep -o '"rating"' | wc -l`.
+
+Bloqueio de tentativas (por IP, via `CF-Connecting-IP`): seis senhas erradas seguidas, a partir da sexta o login responde 429.
+
+```bash
+for i in 1 2 3 4 5 6 7; do
+  curl -s -o /dev/null -w "%{http_code} " -X POST -H 'Content-Type: application/json' \
+    -d '{"password":"errada"}' https://<site>/api/admin/login
+done; echo   # esperado: 401 401 401 401 401 429 429
+```
+
+Faça isso por último: o bloqueio dura alguns minutos e vale também para a senha certa.
 
 ## Manutenção
 
-- Trocar a senha de administrador: rode de novo `npx wrangler pages secret put ADMIN_PASSWORD --project-name montar-times` e faça um novo deploy (`npx wrangler pages deploy dist --project-name montar-times`) para o segredo valer. As sessões já abertas continuam válidas até expirarem (30 dias), a menos que você troque também o `SESSION_SECRET`, o que invalida todas as sessões.
+- Trocar a senha de administrador: rode de novo `npx wrangler pages secret put ADMIN_PASSWORD --project-name montar-times` e faça um novo deploy (`npx wrangler pages deploy dist --project-name montar-times --branch main`) para o segredo valer. As sessões já abertas continuam válidas até expirarem (30 dias), a menos que você troque também o `SESSION_SECRET`, o que invalida todas as sessões.
 - Novas migrations: `npx wrangler d1 migrations apply montar-times --remote`.
