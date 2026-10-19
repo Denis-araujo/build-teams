@@ -43,19 +43,19 @@ function Stepper(props: {
 }) {
   const { title, hint, value, testId, minusLabel, plusLabel, onChange, min, max } = props
   return (
-    <div className="stepper">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 15 }}>{title}</span>
-        <span style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>{hint}</span>
+    <div className="flex items-center justify-between gap-3 px-[14px] py-3 not-first:border-t not-first:border-neutral-900">
+      <div className="flex flex-col gap-[2px]">
+        <span className="text-[14px]">{title}</span>
+        <span className="text-[12px] text-neutral-400">{hint}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button type="button" className="btn btn-ghost btn-icon stepper-btn" aria-label={minusLabel} onClick={() => onChange(clamp(value - 1, min, max))}>
+      <div className="flex items-center gap-[6px]">
+        <button type="button" className="btn btn-ghost btn-icon size-[34px] text-[18px] bg-surface" aria-label={minusLabel} onClick={() => onChange(clamp(value - 1, min, max))}>
           −
         </button>
-        <span data-testid={testId} style={{ minWidth: 32, textAlign: 'center', fontSize: 22, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+        <span data-testid={testId} className="min-w-[30px] text-center text-[20px] font-medium tabular-nums">
           {value}
         </span>
-        <button type="button" className="btn btn-ghost btn-icon stepper-btn" aria-label={plusLabel} onClick={() => onChange(clamp(value + 1, min, max))}>
+        <button type="button" className="btn btn-ghost btn-icon size-[34px] text-[18px] bg-surface" aria-label={plusLabel} onClick={() => onChange(clamp(value + 1, min, max))}>
           +
         </button>
       </div>
@@ -102,44 +102,63 @@ function Dialog({ paidCount, initial, lockedCount, hasTeams, onConfirm, onClose 
   }
 
   const disabled = paidCount < teams
+  const slots = teams * size
+  const fillPct = (Math.min(paidCount, slots) / Math.max(paidCount, slots, 1)) * 100
+  const overPct = (paidCount > slots ? (paidCount - slots) / paidCount : 0) * 100
   return (
-    <div className="modal-backdrop" data-testid="modal-backdrop" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-[rgba(23,35,57,0.45)] flex items-center justify-center p-4" data-testid="modal-backdrop" onClick={onClose}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="modal"
+        className="w-full max-w-[440px] max-h-full overflow-auto bg-surface rounded-lg shadow-lg p-6 flex flex-col gap-5 box-border"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={trapTab}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <h2 id={titleId} style={{ margin: 0, fontSize: 22, fontWeight: 500 }}>
+        <div className="flex flex-col gap-1">
+          <h2 id={titleId} className="m-0 text-[22px] font-medium tracking-[-0.01em]">
             Montar times
           </h2>
-          <span style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>{paidCount} pagaram</span>
+          <span className="text-[13px] text-neutral-400">{paidCount} pagaram</span>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {PRESETS.map(([t, z]) => (
-            <button
-              key={`${t}x${z}`}
-              type="button"
-              className="btn btn-ghost"
-              style={{ fontSize: 13, padding: '4px 10px' }}
-              onClick={() => {
-                setTeams(t)
-                setSize(z)
-              }}
-            >
-              {`${t} times de ${z}`}
-            </button>
-          ))}
+        <div className="grid grid-cols-3 gap-2">
+          {PRESETS.map(([t, z]) => {
+            const on = teams === t && size === z
+            return (
+              <button
+                key={`${t}x${z}`}
+                type="button"
+                aria-pressed={on}
+                className={
+                  on
+                    ? 'flex flex-col items-start gap-[2px] px-3 py-[10px] rounded-md border-0 text-left cursor-pointer text-text font-[inherit] shadow-[inset_0_0_0_2px_var(--navy)] bg-accent-900'
+                    : 'flex flex-col items-start gap-[2px] px-3 py-[10px] rounded-md border-0 text-left cursor-pointer text-text font-[inherit] shadow-[inset_0_0_0_1px_var(--color-neutral-900)] bg-surface'
+                }
+                onClick={() => {
+                  setTeams(t)
+                  setSize(z)
+                }}
+              >
+                <span aria-hidden="true" className="text-[18px] font-medium tabular-nums">{`${t} × ${z}`}</span>
+                <span className="text-[12px] text-neutral-400">{`${t} times de ${z}`}</span>
+              </button>
+            )
+          })}
         </div>
-        <Stepper title="Times" hint="de 2 a 8" value={teams} testId="teams-value" minusLabel="Menos times" plusLabel="Mais times" onChange={setTeams} min={2} max={8} />
-        <Stepper title="Jogadores por time" hint="de 1 a 12" value={size} testId="size-value" minusLabel="Menos jogadores por time" plusLabel="Mais jogadores por time" onChange={setSize} min={1} max={12} />
-        <div className="modal-summary">{summaryText(paidCount, teams, size, lockedCount, hasTeams)}</div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div className="flex flex-col rounded-md bg-bg">
+          <Stepper title="Times" hint="de 2 a 8" value={teams} testId="teams-value" minusLabel="Menos times" plusLabel="Mais times" onChange={setTeams} min={2} max={8} />
+          <Stepper title="Jogadores por time" hint="de 1 a 12" value={size} testId="size-value" minusLabel="Menos jogadores por time" plusLabel="Mais jogadores por time" onChange={setSize} min={1} max={12} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-[3px] h-2 rounded-full overflow-hidden bg-neutral-900">
+            <div className="bg-navy transition-[width] duration-200" style={{ width: `${fillPct}%` }} />
+            <div className="bg-gold transition-[width] duration-200" style={{ width: `${overPct}%` }} />
+          </div>
+          <span className="text-[13px] text-neutral-400 text-pretty">{summaryText(paidCount, teams, size, lockedCount, hasTeams)}</span>
+        </div>
+        <div className="flex justify-end gap-2">
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancelar
           </button>
