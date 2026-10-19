@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { PlayersPanel } from '../components/PlayersPanel'
 import { GameBar } from '../components/GameBar'
 import { SettingsToggle } from '../components/SettingsToggle'
 import { useAdminData } from '../hooks/useAdminData'
@@ -58,8 +59,16 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
           <>
             <GameBar game={data.game} setGame={data.setGame} onUnauthorized={onLoggedOut} />
             <SettingsToggle settings={data.settings} setSettings={data.setSettings} onUnauthorized={onLoggedOut} />
-            {/* Tasks 15 e 16 preenchem esta seção (jogadores, pagamentos e sorteio). */}
-            <section aria-label="Jogadores e sorteio" className="admin-card" />
+            <section aria-label="Jogadores e sorteio" className="admin-columns">
+              <PlayersPanel
+                players={data.players}
+                game={data.game}
+                onPlayersChange={data.setPlayers}
+                onGameChange={data.setGame}
+                onUnauthorized={onLoggedOut}
+              />
+              {/* A Task 16 acrescenta a área de times ao lado do painel. */}
+            </section>
           </>
         )}
       </main>

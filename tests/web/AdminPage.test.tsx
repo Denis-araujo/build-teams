@@ -35,6 +35,7 @@ const authed = (over: Routes = {}): Routes => ({
   'GET /api/admin/me': { status: 200, body: { ok: true } },
   'GET /api/admin/game': { status: 200, body: null },
   'GET /api/admin/settings': { status: 200, body: { memberSeesStars: false } },
+  'GET /api/admin/players': { status: 200, body: [] },
   ...over,
 })
 
@@ -108,6 +109,7 @@ describe('login', () => {
       },
       'GET /api/admin/game': { status: 200, body: null },
       'GET /api/admin/settings': { status: 200, body: { memberSeesStars: false } },
+      'GET /api/admin/players': { status: 200, body: [] },
     })
     await submit('certa')
     expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()

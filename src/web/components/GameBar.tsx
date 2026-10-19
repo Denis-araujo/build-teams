@@ -12,6 +12,12 @@ type Props = {
 
 export function GameBar({ game, setGame, onUnauthorized }: Props) {
   const [date, setDate] = useState(game?.date ?? '')
+  // Ressincroniza o campo quando o jogo ativo muda (recarga, exclusão em outra aba etc.).
+  const [syncedDate, setSyncedDate] = useState(game?.date ?? '')
+  if ((game?.date ?? '') !== syncedDate) {
+    setSyncedDate(game?.date ?? '')
+    setDate(game?.date ?? '')
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

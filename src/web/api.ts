@@ -1,4 +1,4 @@
-import type { Game, PublicGame } from '../shared/types'
+import type { Game, Player, PublicGame } from '../shared/types'
 
 export type Settings = { memberSeesStars: boolean }
 
@@ -73,4 +73,17 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ memberSeesStars }),
     }),
+
+  getPlayers: () => request<Player[]>('/api/admin/players'),
+  createPlayer: (p: { name: string; rating: number }) =>
+    request<Player>('/api/admin/players', { method: 'POST', body: JSON.stringify(p) }),
+  updatePlayer: (id: string, patch: { name?: string; rating?: number }) =>
+    request<Player>(`/api/admin/players/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  archivePlayer: (id: string) =>
+    request<void>(`/api/admin/players/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  setPaid: (playerId: string, paid: boolean) =>
+    request<Game>('/api/admin/game/paid', { method: 'PUT', body: JSON.stringify({ playerId, paid }) }),
 }

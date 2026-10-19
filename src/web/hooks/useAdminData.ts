@@ -1,29 +1,51 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, UnauthorizedError, type Settings } from '../api'
-import type { Game } from '../../shared/types'
+import type { Game, Player } from '../../shared/types'
 
 export type AdminStatus = 'loading' | 'ready' | 'unauthorized' | 'error'
 
-/** Estado compartilhado do painel. As Tasks 15–16 acrescentam campos (jogadores etc.) aqui. */
+/** Estado compartilhado do painel. A Task 16 acrescenta o que faltar (sorteio) aqui. */
 export function useAdminData(): {
   status: AdminStatus
   game: Game | null
   settings: Settings | null
+  players: Player[]
   reload(): Promise<void>
   setGame(game: Game | null): void
   setSettings(s: Settings): void
+  setPlayers(players: Player[]): void
 } {
   const [status, setStatus] = useState<AdminStatus>('loading')
-  const [game, setGame] = useState<Game | null>(null)
-  const [settings, setSettings] = useState<Settings | null>(null)
+  const [game, setGameState] = useState<Game | null>(null)
+  const [settings, setSettingsState] = useState<Settings | null>(null)
+  const [players, setPlayersState] = useState<Player[]>([])
+  // Cada recarga e cada mutação incrementam o contador; recarga que não é a mais recente é descartada.
+  const version = useRef(0)
+
+  const setGame = useCallback((g: Game | null) => {
+    version.current++
+    setGameState(g)
+  }, [])
+  const setSettings = useCallback((s: Settings) => {
+    version.current++
+    setSettingsState(s)
+  }, [])
+  const setPlayers = useCallback((p: Player[]) => {
+    version.current++
+    setPlayersState(p)
+  }, [])
 
   const reload = useCallback(async () => {
+    const mine = ++version.current
     try {
-      const [g, s] = await Promise.all([api.getAdminGame(), api.getSettings()])
-      setGame(g)
-      setSettings(s)
+      const [g, s, p] = await Promise.all([api.getAdminGame(), api.getSettings(), api.getPlayers()])
+      if (mine !== version.current) return
+      setGameState(g)
+      setSettingsState(s)
+      setPlayersState(p)
       setStatus('ready')
     } catch (e) {
+      if (mine !== version.current && !(e instanceof UnauthorizedError)) return
       setStatus(e instanceof UnauthorizedError ? 'unauthorized' : 'error')
     }
   }, [])
@@ -33,5 +55,5 @@ export function useAdminData(): {
     void reload()
   }, [reload])
 
-  return { status, game, settings, reload, setGame, setSettings }
+  return { status, game, settings, players, reload, setGame, setSettings, setPlayers }
 }

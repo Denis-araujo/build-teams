@@ -65,12 +65,14 @@ export function StarRating(props: {
                 <button
                   type="button"
                   aria-label={`${formatRating(half)} ${half === 1 ? 'estrela' : 'estrelas'}`}
+                  className="star-hit"
                   onClick={() => onChange(half)}
                   style={hit('left')}
                 />
                 <button
                   type="button"
                   aria-label={`${formatRating(n)} ${n === 1 ? 'estrela' : 'estrelas'}`}
+                  className="star-hit"
                   onClick={() => onChange(n)}
                   style={hit('right')}
                 />
