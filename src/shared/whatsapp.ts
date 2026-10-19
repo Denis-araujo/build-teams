@@ -12,7 +12,7 @@ export interface WhatsAppTextInput {
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-function fmt(n: number): string {
+export function fmt(n: number): string {
   const r = Math.round(n * 10) / 10;
   return r.toFixed(Number.isInteger(r) ? 0 : 1).replace('.', ',');
 }

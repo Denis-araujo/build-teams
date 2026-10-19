@@ -1,4 +1,4 @@
-import type { Game, Player, PublicGame } from '../shared/types'
+import type { DrawState, Game, Player, PublicGame } from '../shared/types'
 
 export type Settings = { memberSeesStars: boolean }
 
@@ -86,4 +86,6 @@ export const api = {
     request<void>(`/api/admin/players/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   setPaid: (playerId: string, paid: boolean) =>
     request<Game>('/api/admin/game/paid', { method: 'PUT', body: JSON.stringify({ playerId, paid }) }),
+  saveDraw: (state: DrawState) =>
+    request<Game>('/api/admin/game/draw', { method: 'PUT', body: JSON.stringify(state) }),
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { PlayersPanel } from '../components/PlayersPanel'
+import { DrawArea } from '../components/DrawArea'
 import { GameBar } from '../components/GameBar'
 import { SettingsToggle } from '../components/SettingsToggle'
 import { useAdminData } from '../hooks/useAdminData'
@@ -67,7 +68,12 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 onGameChange={data.setGame}
                 onUnauthorized={onLoggedOut}
               />
-              {/* A Task 16 acrescenta a área de times ao lado do painel. */}
+              <DrawArea
+                game={data.game}
+                players={data.players}
+                onGameChange={data.setGame}
+                onUnauthorized={onLoggedOut}
+              />
             </section>
           </>
         )}
