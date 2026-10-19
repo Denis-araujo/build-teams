@@ -174,7 +174,7 @@ a, a:hover { color: var(--gold-ink); }
 .plain-list { list-style: none; margin: 0; padding: 0; }
 
 /* Administrador */
-.admin-main { display: flex; flex-direction: column; gap: 20px; padding: 8px 16px 48px; max-width: 960px; }
+.admin-main { display: flex; flex-direction: column; gap: 20px; padding: 8px 24px 48px; }
 .admin-card {
   display: flex;
   flex-direction: column;
