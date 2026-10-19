@@ -25,7 +25,7 @@ export function ReservesBar({ reserves, playersById, barProps, renderChipExtras,
       {...barProps}
       className="flex flex-wrap items-center gap-x-3 gap-y-[10px] rounded-lg border border-dashed border-neutral-700 px-4 py-[14px] transition-shadow duration-[120ms]"
     >
-      <h2 className="m-0 text-xs font-normal uppercase tracking-[0.06em] text-neutral-500">Reservas · {members.length}</h2>
+      <h2 className="m-0 text-[12px] leading-[1.55] font-normal uppercase tracking-[0.06em] text-neutral-500">Reservas · {members.length}</h2>
       {!members.length && <span className="text-[13px] text-neutral-400">Solte aqui para mandar às reservas</span>}
       <ul className="m-0 flex list-none flex-wrap gap-[6px] p-0">
         {members.map((p) => (
@@ -35,7 +35,7 @@ export function ReservesBar({ reserves, playersById, barProps, renderChipExtras,
             className="flex items-center gap-[6px] rounded-full bg-surface px-[10px] py-1 text-[13px] shadow-sm [&[draggable=true]]:cursor-grab"
           >
             <span>{p.name}</span>
-            {typeof p.rating === 'number' && <span className="text-xs text-gold-ink tabular-nums">★ {fmt(p.rating)}</span>}
+            {typeof p.rating === 'number' && <span className="text-[12px] text-gold-ink tabular-nums">★ {fmt(p.rating)}</span>}
             {renderChipExtras?.(p)}
           </li>
         ))}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import { drawTeams } from '../../shared/draw'
 import type { DrawState, Game, Player } from '../../shared/types'
@@ -13,6 +13,8 @@ import { ReservesBar } from './ReservesBar'
 import { TeamCards } from './TeamCards'
 
 type Props = {
+  /** Cartão do jogo: primeiro filho da coluna "Times" (v4). */
+  gameCard?: ReactNode
   game: Game | null
   players: Player[]
   onGameChange(game: Game | null): void
@@ -25,7 +27,7 @@ const HIGHLIGHT_TEAM = '0 0 0 2px var(--color-accent), 0 8px 24px rgba(36,54,90,
 const HIGHLIGHT_RESERVES = '0 0 0 2px var(--color-accent)'
 
 const MOVE_SELECT =
-  'order-3 h-[26px] w-[92px] cursor-pointer rounded-sm border-0 bg-surface px-1 text-xs text-text shadow-sm aria-disabled:cursor-not-allowed aria-disabled:opacity-50'
+  'order-3 h-[26px] w-[92px] cursor-pointer rounded-sm border-0 bg-surface px-1 text-[12px] text-text shadow-sm aria-disabled:cursor-not-allowed aria-disabled:opacity-50'
 const LOCK_ON =
   'M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'
 const LOCK_OFF =
@@ -33,7 +35,7 @@ const LOCK_OFF =
 
 const DEFAULTS = { teamCount: 2, teamSize: 6 }
 
-export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale }: Props) {
+export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized, onStale }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -225,6 +227,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
       aria-label="Times"
       aria-busy={busy}
     >
+      {gameCard}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="m-0 text-[32px] font-medium tracking-[-0.02em]">Times</h1>
@@ -270,13 +273,17 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
       )}
 
       {!hasTeams || !draw ? (
-        <Onboarding
-          marked={paidPlayers.length}
-          total={players.length}
-          hasGame={!!game}
-          busy={busy}
-          onOpen={() => setModalOpen(true)}
-        />
+        <>
+          <Onboarding
+            marked={paidPlayers.length}
+            total={players.length}
+            hasGame={!!game}
+            busy={busy}
+            onOpen={() => setModalOpen(true)}
+          />
+          {/* v4: a grade vazia dos times continua na coluna e soma um gap de 20px. */}
+          <div aria-hidden="true" />
+        </>
       ) : (
         <>
           <BalanceCard teams={draw.teams} ratingById={ratings} />
@@ -329,7 +336,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
               reserves={draw.reserves.flatMap((id) => playersById.get(id) ?? [])}
             />
           )}
-          <div className="flex flex-wrap gap-x-[18px] gap-y-[6px] text-xs text-neutral-500">
+          <div className="flex flex-wrap gap-x-[18px] gap-y-[6px] text-[12px] text-neutral-500">
             <span>Arraste para trocar de time</span>
             <span>Cadeado mantém o jogador no time ao sortear de novo</span>
             {outside > 0 && (

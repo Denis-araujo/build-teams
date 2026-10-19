@@ -221,7 +221,10 @@ describe('MemberPage', () => {
           'O organizador ainda não cadastrou ninguém. Quando o elenco estiver pronto e os times forem sorteados, a escalação aparece aqui.',
         ),
       ).toBeTruthy()
-      expect(screen.getByText('Próximo jogo: Sábado, 17 de outubro · 19:00')).toBeTruthy()
+      // A pílula tem dois itens flex (rótulo e data, como no v4): o texto completo é o do elemento.
+      expect(
+        screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === 'Próximo jogo: Sábado, 17 de outubro · 19:00'),
+      ).toBeTruthy()
       // o cabeçalho continua; o cartão do jogo, o aviso de times e o elenco não aparecem
       expect(screen.getByText('Membro')).toBeTruthy()
       expect(screen.queryByRole('region', { name: 'Jogo' })).toBeNull()

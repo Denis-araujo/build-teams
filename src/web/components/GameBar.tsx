@@ -16,7 +16,9 @@ type Mode = 'view' | 'confirm' | 'edit'
 const DEFAULT_TIME = '19:00'
 const PAST_MESSAGE = 'Escolha um dia e uma hora que ainda não passaram.'
 const FIELD_LABEL = 'flex flex-col gap-[6px] text-[13px] text-neutral-400'
-const FIELD_INPUT = 'input box-border w-full border border-line bg-bg text-text'
+// O preflight zera o padding interno do campo de data/hora do Chrome; o v4 (sem preflight) tem 1px em cima e embaixo.
+const FIELD_INPUT =
+  'input box-border w-full border border-line bg-bg text-text [&::-webkit-datetime-edit-fields-wrapper]:py-px'
 
 // Validação local: texto simples (v4). Erro do servidor: alerta gold-tint (brief seção 5).
 function FormError({ error }: { error: { text: string; server: boolean } }) {

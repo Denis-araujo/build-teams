@@ -20,8 +20,8 @@ export function Onboarding({ marked, total, hasGame, busy, onOpen }: Props) {
   return (
     <div className="flex flex-col gap-5 rounded-lg bg-surface p-[28px] shadow-sm">
       <div className="flex max-w-[520px] flex-col gap-[6px]">
-        <span className="text-xl font-medium tracking-[-0.01em]">Monte os times em três passos</span>
-        <span className="text-sm text-neutral-400 text-pretty">
+        <span className="text-[20px] font-medium tracking-[-0.01em]">Monte os times em três passos</span>
+        <span className="text-[14px] text-neutral-400 text-pretty">
           As estrelas são distribuídas para os times ficarem o mais parelhos possível. Quem passar das vagas vira reserva.
         </span>
       </div>
@@ -35,7 +35,7 @@ export function Onboarding({ marked, total, hasGame, busy, onOpen }: Props) {
             >
               {s.n}
             </span>
-            <span className="text-sm font-medium">{s.title}</span>
+            <span className="text-[14px] font-medium">{s.title}</span>
             <span className="text-[13px] text-neutral-400 text-pretty">{s.body}</span>
           </div>
         ))}
@@ -52,7 +52,7 @@ export function Onboarding({ marked, total, hasGame, busy, onOpen }: Props) {
           Montar times
         </button>
         {!hasGame && (
-          <span id={HINT_ID} className="text-xs text-neutral-500">
+          <span id={HINT_ID} className="text-[12px] text-neutral-500">
             Cadastre a data do jogo primeiro
           </span>
         )}

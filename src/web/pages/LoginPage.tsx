@@ -57,7 +57,7 @@ export default function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
             {error}
           </p>
         )}
-        <button className="btn btn-primary w-full mt-[5.6px] px-4 py-[10px]" type="submit" disabled={submitting}>
+        <button className="btn btn-primary w-full mt-[5.6px] px-4 py-[10px]" type="submit" disabled={submitting || !password}>
           Entrar
         </button>
       </form>

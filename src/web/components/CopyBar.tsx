@@ -62,7 +62,7 @@ export function CopyBar({ date, teams, reserves }: Props) {
           </label>
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-gold px-4 py-[9px] text-sm font-medium text-ink-on-gold hover:bg-gold-soft"
+            className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-gold px-4 py-[9px] text-[14px] font-medium text-ink-on-gold hover:bg-gold-soft"
             onClick={() => void copy()}
           >
             <svg viewBox="0 0 256 256" width="15" height="15" aria-hidden="true">

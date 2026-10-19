@@ -45,7 +45,7 @@
   --color-accent-2-700: #c7d4ea;
   --color-accent-2-800: #e1e9f6;
   --color-accent-2-900: #f2f6fc;
-  --color-divider: #cfd3e5;
+  --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent); /* literal do DS (v4 não sobrescreve) */
   --color-line: #b2b6ca;
   --color-ink-on-gold: #172339;
 

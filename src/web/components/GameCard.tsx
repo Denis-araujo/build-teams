@@ -34,7 +34,7 @@ export function GameCard({ game, actions, children, rootRef }: Props) {
               </div>
               <div className="flex min-w-0 flex-col gap-[3px]">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs tracking-[0.06em] text-neutral-500 uppercase">Próximo jogo</span>
+                  <span className="text-[12px] tracking-[0.06em] text-neutral-500 uppercase">Próximo jogo</span>
                   <span
                     className={`rounded-full px-2 py-[2px] text-[11px] font-medium ${
                       rel === 'Já aconteceu'

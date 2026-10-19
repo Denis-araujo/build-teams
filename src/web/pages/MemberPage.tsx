@@ -3,8 +3,9 @@ import { BalanceCard } from '../components/BalanceCard'
 import { GameCard } from '../components/GameCard'
 import { Icon } from '../components/icons'
 import { SiteHeader } from '../components/SiteHeader'
-import { RatingPill } from '../components/TeamCards'
-import { StarRating } from '../components/StarRating'
+import { RatingPill, TeamTotal } from '../components/TeamCards'
+import { fmt, teamAverage, teamTotals } from '../lib/drawStats'
+import { formatRating, StarRating } from '../components/StarRating'
 import { teamColor, teamInk, teamLetter } from '../lib/teamColors'
 import { usePublicGame } from '../hooks/usePublicGame'
 import type { PublicGame } from '../../shared/types'
@@ -16,6 +17,11 @@ const SHUFFLE_PATH =
 const count = (n: number) => `${n} ${n === 1 ? 'jogador' : 'jogadores'}`
 
 function Roster({ game }: { game: PublicGame }) {
+  // v4 (memberRows): quem joga primeiro, depois por nota (ordem estável).
+  const rows = game.players
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => Number(b.p.paid) - Number(a.p.paid) || (b.p.rating ?? 0) - (a.p.rating ?? 0) || a.i - b.i)
+    .map(({ p }) => p)
   return (
     <section className="flex min-w-0 max-w-[380px] flex-[1_1_300px] flex-col overflow-hidden rounded-lg bg-surface shadow-sm">
       <div className="flex items-baseline justify-between gap-2 px-[18px] pt-[18px] pb-[10px]">
@@ -23,14 +29,21 @@ function Roster({ game }: { game: PublicGame }) {
         <span className="text-[13px] text-neutral-400">{game.players.filter((p) => p.paid).length} de {game.players.length} jogadores</span>
       </div>
       <ul className="m-0 flex list-none flex-col px-2 pb-2">
-        {game.players.map((p) => (
+        {rows.map((p) => (
           <li
             key={p.id}
             className={`flex items-center gap-[10px] border-t border-neutral-900 px-[10px] py-2 ${p.paid ? '' : 'opacity-50'}`}
           >
-            <span className="min-w-0 flex-1 text-sm">{p.name}</span>
+            <span className="min-w-0 flex-1 text-[14px]">{p.name}</span>
             {!p.paid && <span className="text-[11px] tracking-[0.04em] uppercase text-neutral-500">fora</span>}
-            {p.rating !== undefined && <StarRating value={p.rating} size={15} />}
+            {p.rating !== undefined && (
+              <>
+                <StarRating value={p.rating} size={15} />
+                <span className="w-[26px] text-right text-[13px] font-medium text-gold-ink tabular-nums" aria-hidden="true">
+                  {formatRating(p.rating)}
+                </span>
+              </>
+            )}
           </li>
         ))}
       </ul>
@@ -40,6 +53,8 @@ function Roster({ game }: { game: PublicGame }) {
 
 function TeamCards({ game }: { game: PublicGame }) {
   const byId = new Map(game.players.map((p) => [p.id, p]))
+  const ratings = new Map(game.players.flatMap((p) => (typeof p.rating === 'number' ? [[p.id, p.rating] as const] : [])))
+  const totals = teamTotals(game.teams, ratings)
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(min(240px,100%),1fr))] gap-4">
       {game.teams.map((team, i) => {
@@ -60,18 +75,19 @@ function TeamCards({ game }: { game: PublicGame }) {
                   {teamLetter(i)}
                 </span>
                 <div className="flex min-w-0 flex-col gap-px">
-                  <h2 className="m-0 text-base font-medium">Time {teamLetter(i)}</h2>
-                  <span className="text-xs text-neutral-400">{count(members.length)}</span>
+                  <h2 className="m-0 text-[16px] font-medium leading-[1.55] tracking-normal">Time {teamLetter(i)}</h2>
+                  <span className="text-[12px] text-neutral-400">{count(members.length)}</span>
                 </div>
               </div>
+              {game.showStars && <TeamTotal total={totals[i]} average={teamAverage(team, ratings)} />}
             </div>
             <ul className="m-0 flex list-none flex-col px-2 pb-[10px]">
               {members.map((p, n) => (
                 <li
                   key={p.id}
-                  className="flex flex-wrap items-center gap-2 rounded-sm border-t border-neutral-900 px-2 py-[7px] text-sm hover:bg-bg"
+                  className="flex flex-wrap items-center gap-2 rounded-sm border-t border-neutral-900 px-2 py-[7px] text-[14px] hover:bg-bg"
                 >
-                  <span className="w-4 flex-none text-xs text-neutral-500 tabular-nums">{n + 1}</span>
+                  <span className="w-4 flex-none text-[12px] text-neutral-500 tabular-nums">{n + 1}</span>
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
                   {typeof p.rating === 'number' && <RatingPill rating={p.rating} />}
                 </li>
@@ -131,7 +147,9 @@ export default function MemberPage() {
               <span className="text-gold-ink">
                 <Icon name="calendar" size={16} />
               </span>
-              {`Próximo jogo: ${formatDayLabel(game.date, game.time)}`}
+              {/* Dois itens flex, como no v4: em tela estreita só a data quebra de linha. */}
+              Próximo jogo:{' '}
+              <span>{formatDayLabel(game.date, game.time)}</span>
             </span>
           </div>
         </main>
@@ -141,7 +159,7 @@ export default function MemberPage() {
         {!game ? (
           error ? (
             <p
-              className="m-0 w-full rounded-lg bg-surface px-[28px] py-[40px] text-sm text-neutral-400 shadow-sm"
+              className="m-0 w-full rounded-lg bg-surface px-[28px] py-[40px] text-[14px] text-neutral-400 shadow-sm"
               role="status"
             >
               Não foi possível carregar a escalação. Tentando de novo…
@@ -171,20 +189,23 @@ export default function MemberPage() {
                   </div>
                   <div className="flex max-w-[460px] flex-col gap-[6px]">
                     <span className="text-[20px] font-medium tracking-[-0.01em]">Os times ainda não foram sorteados</span>
-                    <span className="text-sm text-neutral-400 text-pretty">
+                    <span className="text-[14px] text-neutral-400 text-pretty">
                       Assim que o organizador sortear, as escalações aparecem aqui.
                     </span>
                   </div>
                 </div>
               )}
-              {hasTeams && <TeamCards game={game} />}
+              {hasTeams ? <TeamCards game={game} /> : <div aria-hidden="true" /> /* v4: a grade vazia dos times ainda conta um gap */}
               {hasTeams && reserves.length > 0 && (
                 <section className="flex flex-wrap items-center gap-x-3 gap-y-[10px] rounded-lg border border-dashed border-neutral-700 px-4 py-[14px]">
-                  <h2 className="m-0 text-xs font-normal uppercase tracking-[0.06em] text-neutral-500">Reservas · {reserves.length}</h2>
+                  <h2 className="m-0 text-[12px] leading-[1.55] font-normal uppercase tracking-[0.06em] text-neutral-500">Reservas · {reserves.length}</h2>
                   <ul className="m-0 flex list-none flex-wrap gap-[6px] p-0">
                     {reserves.map((p) => (
                       <li key={p.id} className="flex items-center gap-[6px] rounded-full bg-surface px-[10px] py-1 text-[13px] shadow-sm">
                         {p.name}
+                        {typeof p.rating === 'number' && (
+                          <span className="text-[12px] text-gold-ink tabular-nums">★ {fmt(p.rating)}</span>
+                        )}
                       </li>
                     ))}
                   </ul>

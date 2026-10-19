@@ -23,13 +23,28 @@ export function RatingPill({ rating }: { rating: number }) {
     <span
       role="img"
       aria-label={`${fmt(rating)} estrelas`}
-      className="order-2 flex min-w-[44px] flex-none items-center justify-end gap-[3px] rounded-full bg-gold-tint px-[7px] py-[2px] text-xs font-medium text-gold-ink tabular-nums"
+      className="order-2 flex min-w-[44px] flex-none items-center justify-end gap-[3px] rounded-full bg-gold-tint px-[7px] py-[2px] text-[12px] font-medium text-gold-ink tabular-nums"
     >
       <svg viewBox="0 0 256 256" width="11" height="11" aria-hidden="true" className="text-gold">
         <path fill="currentColor" d={STAR_PATH} />
       </svg>
       {fmt(rating)}
     </span>
+  )
+}
+
+/** Total de estrelas e média do time (cabeçalho do card; admin e Membro com estrelas). */
+export function TeamTotal({ total, average }: { total: number; average: number }) {
+  return (
+    <div className="flex flex-col items-end gap-px">
+      <div className="flex items-center gap-1 text-[22px] font-medium tracking-[-0.01em] text-gold-ink tabular-nums">
+        <svg viewBox="0 0 256 256" width="15" height="15" aria-hidden="true" className="text-gold">
+          <path fill="currentColor" d={STAR_PATH} />
+        </svg>
+        <span>{fmt(total)}</span>
+      </div>
+      <span className="text-[12px] text-neutral-400 tabular-nums">média {fmt(average)}</span>
+    </div>
   )
 }
 
@@ -62,21 +77,13 @@ export function TeamCards({ teams, playersById, renderRowExtras, rowProps, cardP
                   {teamLetter(i)}
                 </span>
                 <div className="flex min-w-0 flex-col gap-px">
-                  <h2 className="m-0 text-base font-medium">Time {teamLetter(i)}</h2>
-                  <span className="text-xs text-neutral-400">
+                  <h2 className="m-0 text-[16px] font-medium leading-[1.55] tracking-normal">Time {teamLetter(i)}</h2>
+                  <span className="text-[12px] text-neutral-400">
                     {members.length} {members.length === 1 ? 'jogador' : 'jogadores'}
                   </span>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-px">
-                <div className="flex items-center gap-1 text-[22px] font-medium tracking-[-0.01em] text-gold-ink tabular-nums">
-                  <svg viewBox="0 0 256 256" width="15" height="15" aria-hidden="true" className="text-gold">
-                    <path fill="currentColor" d={STAR_PATH} />
-                  </svg>
-                  <span>{fmt(totals[i])}</span>
-                </div>
-                <span className="text-xs text-neutral-400 tabular-nums">média {fmt(teamAverage(team, ratings))}</span>
-              </div>
+              <TeamTotal total={totals[i]} average={teamAverage(team, ratings)} />
             </div>
             {members.length ? (
               <ul className="m-0 flex list-none flex-col px-2 pb-[10px]">
@@ -87,9 +94,9 @@ export function TeamCards({ teams, playersById, renderRowExtras, rowProps, cardP
                     <li
                       key={p.id}
                       {...rp}
-                      className="flex flex-wrap items-center gap-2 rounded-sm border-t border-neutral-900 px-2 py-[7px] text-sm hover:bg-bg [&[draggable=true]]:cursor-grab"
+                      className="flex flex-wrap items-center gap-2 rounded-sm border-t border-neutral-900 px-2 py-[7px] text-[14px] hover:bg-bg [&[draggable=true]]:cursor-grab"
                     >
-                      <span className="w-4 flex-none text-xs text-neutral-500 tabular-nums">{n + 1}</span>
+                      <span className="w-4 flex-none text-[12px] text-neutral-500 tabular-nums">{n + 1}</span>
                       <span className="min-w-0 flex-1 truncate">{p.name}</span>
                       {typeof p.rating === 'number' && <RatingPill rating={p.rating} />}
                       {renderRowExtras?.(ctx)}

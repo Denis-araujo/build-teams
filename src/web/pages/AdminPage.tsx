@@ -51,8 +51,8 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
         )}
         {data.status === 'ready' && (
           <>
-            <GameBar game={data.game} setGame={data.setGame} onUnauthorized={onLoggedOut} />
-            <section aria-label="Jogadores e sorteio" className="flex flex-wrap gap-[24px] items-start">
+            {/* display:contents: o aside "Elenco" e a coluna "Times" são filhos diretos do <main>, como no v4. */}
+            <section aria-label="Jogadores e sorteio" className="contents">
               <PlayersPanel
                 players={data.players}
                 game={data.game}
@@ -65,6 +65,7 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 }
               />
               <DrawArea
+                gameCard={<GameBar game={data.game} setGame={data.setGame} onUnauthorized={onLoggedOut} />}
                 game={data.game}
                 players={data.players}
                 onGameChange={data.setGame}
