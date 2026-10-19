@@ -7,3 +7,11 @@ export type DrawState = {
   reserves: string[];
   locks: Record<string, number>;
 };
+
+export type PublicGame = {
+  date: string;
+  showStars: boolean;
+  players: { id: string; name: string; paid: boolean; rating?: number }[];
+  teams: string[][];
+  reserves: string[];
+};
