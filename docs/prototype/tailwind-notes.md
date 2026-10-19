@@ -1,6 +1,6 @@
 # Notas do Tailwind v4 (Task 1)
 
-Arquivo: `src/web/styles.css` (importado depois de `theme.css` em `main.tsx`; `theme.css` sai na Task 8).
+Arquivo: `src/web/styles.css`. O CSS antigo (`theme.css`) foi removido na Task 8: não há mais `@layer legacy`; a ordem de camadas é a padrão do Tailwind.
 
 ## Chaves do `@theme static` (nome -> valor)
 - Cores base: `bg` #e4e7f5, `surface` #f3f5fe, `text` #292b31, `accent` #344b78, `navy` #24365a, `navy-ink` #f3f5fe, `navy-muted` #c7d4ea, `divider` #cfd3e5 (decisão do plano), `line` #b2b6ca, `ink-on-gold` #172339.
@@ -26,4 +26,7 @@ box-sizing, `body` 15px/1.55/Inter, `h1..h6` (42/32/25/20/16/13px), `p`, `a` (#4
 - `.tag-accent-2`, `.seg`, `.card`, `.dialog`, `.nav`, `.table`, `.radio` NÃO foram portados (o v4 não os usa e a tarefa não os listava); `.tag-accent`/`.tag-neutral` usam as escalas invertidas, então ficam claros com texto escuro.
 - `--color-accent-2` (#a7a1db) e `--color-section*` não foram definidos (não usados).
 - `a` usa as cores literais do `<style>` do v4 em vez de `var(--color-accent)` do DS.
-- Convivência com `theme.css`: as regras dele são fora de camada e vencem as de `@layer components` com mesma especificidade (ex.: `.btn-primary` ainda sai preenchido nos componentes antigos até a Task 8). Utilitários e `:root` do `styles.css` (importado depois) prevalecem.
+- `theme.css` removido (Task 8): nenhuma classe antiga resta nos componentes (a única migrada foi `form-error` em `AdminPage`, agora utilitários de alerta dourado).
+
+## O que resta em `styles.css`
+`@theme static` (tokens), `:root` (variáveis cruas), `@layer base` (reset, tipografia, foco, seleção) e `@layer components` (primitivos `.btn*`, `.input`, `.field > label`, `.tag*`, `.hr`). Nada de regras específicas de tela. `star-hit` em `StarRating` é só um marcador de classe (teste); o foco visível vem de utilitários.

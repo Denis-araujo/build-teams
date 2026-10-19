@@ -1,5 +1,4 @@
-@layer legacy, theme, base, components, utilities;
-@import "./theme.css" layer(legacy);
+@layer theme, base, components, utilities;
 @import "tailwindcss";
 
 /* Tokens do Montar Times v4 (docs/prototype/v4-design-brief.md 2.1-2.7).

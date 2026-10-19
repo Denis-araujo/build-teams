@@ -29,7 +29,7 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
       <SiteHeader roleLabel="Administrador" onLogout={() => void logout()} />
       <main className="flex flex-wrap gap-[28px] px-[28px] pt-[24px] pb-[56px] items-start max-w-[1440px] mx-auto box-border">
         {data.status === 'error' && (
-          <p className="form-error" role="alert">
+          <p className="px-3 py-2 rounded-sm bg-gold-tint text-gold-ink shadow-[inset_0_0_0_1px_var(--gold-soft)]" role="alert">
             Não foi possível carregar os dados.{' '}
             <button className="btn btn-ghost" type="button" onClick={() => void data.reload()}>
               Tentar de novo
