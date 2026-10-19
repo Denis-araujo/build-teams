@@ -116,29 +116,36 @@ export async function setPaid(db: D1Database, playerId: string, paid: boolean): 
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const game = await requireActive(db)
+    const rev = game.revision
     const next = paid ? null : cleanedDraw(game.draw, playerId)
-    const guard = 'EXISTS (SELECT 1 FROM games WHERE id = ? AND revision = ?)'
-    // O primeiro comando é a guarda: só avança se a revisão lida ainda é a atual.
-    const bump = next
+    // Fase 1: guarda de revisão (e limpeza do sorteio, ao desmarcar).
+    const phase1 = next
       ? db
           .prepare(
             "UPDATE games SET draw_json = ?, revision = revision + 1 WHERE id = ? AND state = 'active' AND revision = ?",
           )
-          .bind(JSON.stringify(next), game.id, game.revision)
+          .bind(JSON.stringify(next), game.id, rev)
       : db
           .prepare(
             "UPDATE games SET revision = revision + 1 WHERE id = ? AND state = 'active' AND revision = ?",
           )
-          .bind(game.id, game.revision)
+          .bind(game.id, rev)
+    if ((await phase1.run()).meta.changes !== 1) continue
+
+    // Fase 2: o pagamento só muda se ninguém escreveu entre as fases (revisão ainda rev + 1).
+    const guard = 'EXISTS (SELECT 1 FROM games WHERE id = ? AND revision = ?)'
     const pay = paid
       ? db
           .prepare(`INSERT OR IGNORE INTO game_paid (game_id, player_id) SELECT ?, ? WHERE ${guard}`)
-          .bind(game.id, playerId, game.id, game.revision + 1)
+          .bind(game.id, playerId, game.id, rev + 1)
       : db
           .prepare(`DELETE FROM game_paid WHERE game_id = ? AND player_id = ? AND ${guard}`)
-          .bind(game.id, playerId, game.id, game.revision + 1)
-    const [first] = await db.batch([bump, pay])
-    if (first.meta.changes === 1) return publicGame(await requireActive(db))
+          .bind(game.id, playerId, game.id, rev + 1)
+    const bump = db
+      .prepare('UPDATE games SET revision = revision + 1 WHERE id = ? AND revision = ?')
+      .bind(game.id, rev + 1)
+    const [, bumped] = await db.batch([pay, bump])
+    if (bumped.meta.changes === 1) return publicGame(await requireActive(db))
   }
   throw new ValidationError(CHANGED)
 }

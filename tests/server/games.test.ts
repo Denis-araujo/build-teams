@@ -150,28 +150,40 @@ describe('games', () => {
   })
 
   describe('concurrency', () => {
-    // Runs `hook` once, right after the first read of game_paid (the gap between read and write).
-    function withGap(db: D1Database, hook: () => Promise<void>): D1Database {
+    // Runs `hook` after a matching read/write: `all` of game_paid (gap between read and
+    // phase 1) or `run` of the revision-guarded UPDATE (gap between phase 1 and phase 2).
+    function withGap(
+      db: D1Database,
+      where: 'read' | 'phase1',
+      hook: () => Promise<void>,
+      once = true,
+    ): D1Database {
       let done = false
       type Stmt = D1PreparedStatement
-      const wrap = (stmt: Stmt, gap: boolean): Stmt =>
+      const fire = async () => {
+        if (once && done) return
+        done = true
+        await hook()
+      }
+      const wrap = (stmt: Stmt, sql: string): Stmt =>
         ({
           ...stmt,
-          bind: (...a: unknown[]) => wrap(stmt.bind(...a), gap),
+          bind: (...a: unknown[]) => wrap(stmt.bind(...a), sql),
           all: async () => {
             const r = await stmt.all()
-            if (gap && !done) {
-              done = true
-              await hook()
+            if (where === 'read' && /FROM game_paid WHERE game_id/.test(sql)) await fire()
+            return r
+          },
+          run: async () => {
+            const r = await stmt.run()
+            if (where === 'phase1' && /^UPDATE games SET (draw_json = \?, )?revision = revision \+ 1 WHERE id = \? AND state/.test(sql) && !/team_count/.test(sql)) {
+              await fire()
             }
             return r
           },
         }) as unknown as Stmt
       return new Proxy(db, {
-        get: (t, k) =>
-          k === 'prepare'
-            ? (sql: string) => wrap(t.prepare(sql), /FROM game_paid WHERE game_id/.test(sql))
-            : (t as never)[k],
+        get: (t, k) => (k === 'prepare' ? (sql: string) => wrap(t.prepare(sql), sql) : (t as never)[k]),
       })
     }
 
@@ -180,7 +192,7 @@ describe('games', () => {
       await setPaid(db, a.id, true)
       await setPaid(db, b.id, true)
       const state: DrawState = { teamCount: 2, teamSize: 2, teams: [[a.id], [b.id]], reserves: [], locks: {} }
-      const racy = withGap(db, async () => {
+      const racy = withGap(db, 'read', async () => {
         await setPaid(db, b.id, false)
       })
       await expect(saveDraw(racy, state)).rejects.toThrow(ValidationError)
@@ -194,12 +206,45 @@ describe('games', () => {
       for (const p of [a, b, c]) await setPaid(db, p.id, true)
       await saveDraw(db, { teamCount: 2, teamSize: 2, teams: [[a.id], [b.id]], reserves: [], locks: {} })
       const edited: DrawState = { teamCount: 2, teamSize: 2, teams: [[a.id, c.id], [b.id]], reserves: [], locks: {} }
-      const racy = withGap(db, async () => {
+      const racy = withGap(db, 'read', async () => {
         await saveDraw(db, edited)
       })
       const g = await setPaid(racy, a.id, false)
       expect(g.paid.sort()).toEqual([b.id, c.id].sort())
       expect(g.draw!.teams).toEqual([[c.id], [b.id]])
+    })
+
+    async function unpaidScenario(where: 'read' | 'phase1', once: boolean) {
+      const { db, a, b } = await setup()
+      await setPaid(db, a.id, true)
+      await setPaid(db, b.id, true)
+      await saveDraw(db, { teamCount: 2, teamSize: 2, teams: [[a.id], [b.id]], reserves: [], locks: {} })
+      const again: DrawState = { teamCount: 2, teamSize: 2, teams: [[b.id], [a.id]], reserves: [], locks: {} }
+      const racy = withGap(db, where, async () => {
+        await saveDraw(db, again)
+      }, once)
+      const result = await setPaid(racy, a.id, false).then(
+        () => 'ok',
+        (e) => e,
+      )
+      const g = (await getActiveGame(db))!
+      return { a, b, result, g }
+    }
+
+    it.each(['read', 'phase1'] as const)(
+      'setPaid(false) vs competing saveDraw including the player (%s gap) stays consistent',
+      async (where) => {
+        const { a, b, result, g } = await unpaidScenario(where, true)
+        expect(result).toBe('ok')
+        expect(g.paid).toEqual([b.id])
+        expect(JSON.stringify(g.draw)).not.toContain(a.id)
+      },
+    )
+
+    it('exhausted attempts leave game_paid untouched', async () => {
+      const { a, b, result, g } = await unpaidScenario('phase1', false)
+      expect(result).toBeInstanceOf(ValidationError)
+      expect(g.paid.sort()).toEqual([a.id, b.id].sort())
     })
   })
 })
