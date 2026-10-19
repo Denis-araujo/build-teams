@@ -100,6 +100,7 @@ export default function MemberPage() {
       />
 
       <main className="flex flex-wrap gap-[28px] px-[28px] pt-[24px] pb-[56px] items-start max-w-[1440px] mx-auto box-border">
+        {!game && <h1 className="sr-only">Times</h1>}
         {!game ? (
           error ? (
             <p

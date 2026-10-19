@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import { isGameMomentAllowed, todayInBrasilia } from '../../shared/dates'
 import type { Game } from '../../shared/types'
@@ -41,7 +41,28 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<{ text: string; server: boolean } | null>(null)
 
+  const root = useRef<HTMLElement>(null)
+  const busyRef = useRef(false)
+  // Sem window.confirm, o botão que abriu o formulário/confirmação some: devolvemos o foco ao que existir no novo estado.
+  const [pendingFocus, setPendingFocus] = useState<{ target: 'edit' | 'delete' | 'mark' } | null>(null)
+  useLayoutEffect(() => {
+    if (!pendingFocus) return
+    root.current?.querySelector<HTMLElement>(`[data-focus="${pendingFocus.target}"]`)?.focus()
+    setPendingFocus(null)
+  }, [pendingFocus])
+
+  function close(target: 'edit' | 'delete' | 'mark') {
+    setMode('view')
+    setError(null)
+    setPendingFocus({ target })
+  }
+  const onEsc = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && !busyRef.current) close(mode === 'confirm' ? 'delete' : game ? 'edit' : 'mark')
+  }
+
   async function run(action: () => Promise<void>) {
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setError(null)
     try {
@@ -50,6 +71,7 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
       if (e instanceof UnauthorizedError) onUnauthorized()
       else setError({ text: e instanceof HttpError && e.serverMessage ? e.serverMessage : 'Não foi possível salvar. Tente de novo.', server: true })
     } finally {
+      busyRef.current = false
       setBusy(false)
     }
   }
@@ -67,7 +89,7 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
     if (!isGameMomentAllowed(date, time, new Date())) return setError({ text: PAST_MESSAGE, server: false })
     void run(async () => {
       setGame(game ? await api.updateGameDate(date, time) : await api.createGame(date, time))
-      setMode('view')
+      close('edit')
     })
   }
 
@@ -75,7 +97,7 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
     void run(async () => {
       await api.deleteGame()
       setGame(null)
-      setMode('view')
+      close('mark')
     })
   }
 
@@ -84,15 +106,15 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
 
   if (shown === 'confirm' && game) {
     return (
-      <GameCard game={game}>
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+      <GameCard game={game} rootRef={root}>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3" onKeyDown={onEsc}>
           <div className="flex flex-col gap-[3px]">
             <span className="text-[15px] font-medium">Excluir o jogo de {formatGameShort(game.date, game.time)}?</span>
             <span className="text-[13px] text-neutral-400">Pagamentos e sorteio serão perdidos.</span>
             {error && <FormError error={error} />}
           </div>
           <div className="flex gap-[6px]">
-            <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setMode('view')}>
+            <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => close('delete')}>
               Cancelar
             </button>
             <button className="btn btn-primary" type="button" disabled={busy} onClick={remove}>
@@ -106,8 +128,8 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
 
   if (shown === 'edit') {
     return (
-      <GameCard game={game}>
-        <form className="flex flex-col gap-3" onSubmit={submit}>
+      <GameCard game={game} rootRef={root}>
+        <form className="flex flex-col gap-3" onSubmit={submit} onKeyDown={onEsc}>
           <span className="text-[15px] font-medium">{game ? 'Alterar data do jogo' : 'Marcar jogo'}</span>
           <div className="flex flex-wrap items-end gap-[10px]">
             <label className={`${FIELD_LABEL} flex-[1_1_160px]`}>
@@ -125,7 +147,7 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
               <input className={FIELD_INPUT} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
             </label>
             <div className="flex gap-[6px]">
-              <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setMode('view')}>
+              <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => close(game ? 'edit' : 'mark')}>
                 Cancelar
               </button>
               <button className="btn btn-primary" type="submit" disabled={busy}>
@@ -142,6 +164,7 @@ export function GameBar({ game, setGame, onUnauthorized }: Props) {
   return (
     <GameCard
       game={game}
+      rootRef={root}
       actions={{
         onEdit: startEdit,
         onDelete: () => {

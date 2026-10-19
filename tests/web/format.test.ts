@@ -9,6 +9,7 @@ describe('formatDayLabel', () => {
 
   it('sem hora', () => {
     expect(formatDayLabel('2026-12-31')).toBe('Quinta-feira, 31 de dezembro')
+    expect(formatDayLabel('2028-02-29')).toBe('Terça-feira, 29 de fevereiro')
   })
 })
 
@@ -47,6 +48,11 @@ describe('relativeDay', () => {
     // 18/10 03:30 UTC já é 18/10 00:30 em Brasília
     expect(relativeDay('2026-10-17', new Date('2026-10-18T03:30:00Z'))).toBe('Já aconteceu')
     expect(relativeDay('2026-10-18', new Date('2026-10-18T03:30:00Z'))).toBe('Hoje')
+  })
+
+  it('a virada do dia é à meia-noite de Brasília (03:00Z)', () => {
+    expect(relativeDay('2026-10-19', new Date('2026-10-20T02:59:59Z'))).toBe('Hoje')
+    expect(relativeDay('2026-10-19', new Date('2026-10-20T03:00:00Z'))).toBe('Já aconteceu')
   })
 
   it('atravessa virada de mês e ano', () => {

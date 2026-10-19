@@ -62,6 +62,13 @@ describe('login', () => {
     return input
   }
 
+  it('a tela de login tem um único h1 "Administrador"', async () => {
+    setup({ 'GET /api/admin/me': { status: 401 } })
+    await screen.findByLabelText('Senha')
+    const h1 = screen.getAllByRole('heading', { level: 1 })
+    expect(h1.map((h) => h.textContent)).toEqual(['Administrador'])
+  })
+
   it('sem sessão mostra o formulário de senha', async () => {
     setup({ 'GET /api/admin/me': { status: 401 } })
     expect(await screen.findByLabelText('Senha')).toBeTruthy()
@@ -113,6 +120,15 @@ describe('login', () => {
     expect(screen.getByRole('region', { name: 'Jogadores e sorteio' })).toBeTruthy()
     expect(calls(f, 'GET /api/admin/game').length).toBeGreaterThan(0)
     expect(calls(f, 'GET /api/admin/settings').length).toBeGreaterThan(0)
+  })
+})
+
+describe('estrutura', () => {
+  it('logado, o único h1 é "Times" e "Jogadores" é h2', async () => {
+    setup(authed())
+    await screen.findByText('Nenhum jogo marcado')
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Times'])
+    expect(screen.getByRole('heading', { level: 2, name: 'Jogadores' })).toBeTruthy()
   })
 })
 
@@ -231,6 +247,113 @@ describe('GameBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(calls(f, 'DELETE /api/admin/game').length).toBe(0)
     expect(screen.getByText('Próximo jogo')).toBeTruthy()
+  })
+
+  it('o campo Dia tem min = hoje em Brasília (não em UTC)', async () => {
+    vi.setSystemTime(new Date('2026-10-19T02:00:00Z')) // ainda 18/10 em Brasília
+    setup(authed())
+    await screen.findByText('Nenhum jogo marcado')
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar jogo' }))
+    expect(dayInput().min).toBe('2026-10-18')
+  })
+
+  it('Cancelar devolve o foco a "Alterar"; Esc também', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: GAME } }))
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Alterar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Alterar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Alterar' }))
+    fireEvent.keyDown(dayInput(), { key: 'Escape' })
+    expect(screen.queryByLabelText('Dia')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Alterar' }))
+  })
+
+  it('Cancelar e Esc na confirmação devolvem o foco a "Excluir"', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: GAME } }))
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Excluir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Cancelar' }), { key: 'Escape' })
+    expect(screen.queryByText('Pagamentos e sorteio serão perdidos.')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Excluir' }))
+  })
+
+  it('depois de salvar o foco vai a "Alterar"; depois de excluir, a "Marcar jogo"', async () => {
+    setup(
+      authed({
+        'GET /api/admin/game': { status: 200, body: GAME },
+        'PATCH /api/admin/game': { status: 200, body: { ...GAME, date: '2026-10-31' } },
+        'DELETE /api/admin/game': { status: 204 },
+      }),
+    )
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Alterar' }))
+    fireEvent.change(dayInput(), { target: { value: '2026-10-31' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    await screen.findByText('Sábado, 31 de outubro · 19:00')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Alterar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir data' }))
+    await screen.findByText('Nenhum jogo marcado')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Marcar jogo' }))
+  })
+
+  it('401 ao salvar volta ao login', async () => {
+    setup(authed({ 'POST /api/admin/game': { status: 401 } }))
+    await screen.findByText('Nenhum jogo marcado')
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar jogo' }))
+    fireEvent.change(dayInput(), { target: { value: '2026-12-01' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    expect(await screen.findByLabelText('Senha')).toBeTruthy()
+  })
+
+  it('401 ao excluir volta ao login', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: GAME }, 'DELETE /api/admin/game': { status: 401 } }))
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir data' }))
+    expect(await screen.findByLabelText('Senha')).toBeTruthy()
+  })
+
+  it('erro do servidor ao excluir aparece dentro do cartão de confirmação', async () => {
+    setup(
+      authed({
+        'GET /api/admin/game': { status: 200, body: GAME },
+        'DELETE /api/admin/game': { status: 500, body: { error: 'Falhou ao excluir' } },
+      }),
+    )
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir data' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Falhou ao excluir')
+    expect(screen.getByText('Pagamentos e sorteio serão perdidos.')).toBeTruthy()
+  })
+
+  it('envio duplo enquanto salva faz uma única requisição', async () => {
+    let resolve!: () => void
+    const gate = new Promise<void>((r) => (resolve = r))
+    const f = setup(authed())
+    await screen.findByText('Nenhum jogo marcado')
+    // substitui o POST por uma resposta que só sai quando liberada
+    const original = f.getMockImplementation() as (path: string, init?: RequestInit) => Promise<Response>
+    f.mockImplementation(async (path: string, init: RequestInit = {}) => {
+      if (init.method === 'POST' && path === '/api/admin/game') {
+        await gate
+        return respond(201, GAME)
+      }
+      return original(path, init)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar jogo' }))
+    fireEvent.change(dayInput(), { target: { value: '2026-10-24' } })
+    const form = dayInput().closest('form')!
+    fireEvent.submit(form)
+    fireEvent.submit(form)
+    resolve()
+    await screen.findByText('Próximo jogo')
+    expect(calls(f, 'POST /api/admin/game').length).toBe(1)
   })
 })
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { formatGameWeekday, gameDateParts, relativeDay } from '../format'
 import { Icon } from './icons'
 
@@ -9,16 +9,18 @@ type Props = {
   actions?: { onEdit: () => void; onDelete: () => void }
   /** Substitui o corpo (confirmação de exclusão ou formulário de edição). */
   children?: ReactNode
+  /** Raiz do cartão, usada pelo GameBar para devolver o foco. */
+  rootRef?: Ref<HTMLElement>
 }
 
 const ROW = 'flex flex-wrap items-center justify-between gap-x-4 gap-y-3'
 
 /** Cartão do jogo do v4 (brief 3.1d): visualização, vazio e, via children, confirmar/editar. */
-export function GameCard({ game, actions, children }: Props) {
+export function GameCard({ game, actions, children, rootRef }: Props) {
   const rel = game ? relativeDay(game.date, new Date()) : null
   const parts = game ? gameDateParts(game.date) : null
   return (
-    <section aria-label="Jogo" className="rounded-lg bg-surface px-[18px] py-4 shadow-sm">
+    <section ref={rootRef} aria-label="Jogo" className="rounded-lg bg-surface px-[18px] py-4 shadow-sm">
       {children ??
         (game && parts && rel ? (
           <div className={ROW}>
@@ -50,11 +52,11 @@ export function GameCard({ game, actions, children }: Props) {
             </div>
             {actions && (
               <div className="flex gap-[6px]">
-                <button className="btn btn-ghost gap-[6px]" type="button" onClick={actions.onEdit}>
+                <button className="btn btn-ghost gap-[6px]" type="button" data-focus="edit" onClick={actions.onEdit}>
                   <Icon name="pencil" size={14} />
                   Alterar
                 </button>
-                <button className="btn btn-ghost gap-[6px]" type="button" onClick={actions.onDelete}>
+                <button className="btn btn-ghost gap-[6px]" type="button" data-focus="delete" onClick={actions.onDelete}>
                   <Icon name="trash" size={14} />
                   Excluir
                 </button>
@@ -80,7 +82,7 @@ export function GameCard({ game, actions, children }: Props) {
               </div>
             </div>
             {actions && (
-              <button className="btn btn-primary gap-[6px]" type="button" onClick={actions.onEdit}>
+              <button className="btn btn-primary gap-[6px]" type="button" data-focus="mark" onClick={actions.onEdit}>
                 <Icon name="plus" size={14} />
                 Marcar jogo
               </button>

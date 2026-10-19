@@ -48,6 +48,18 @@ describe('MemberPage', () => {
     setup(null)
     expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()
     expect(screen.getByText('Sem jogo marcado')).toBeTruthy()
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Times'])
+  })
+
+  it('erro na primeira busca (sem dados) ainda tem um único h1 "Times"', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respond({ error: 'x' }, false, 500)))
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>,
+    )
+    await screen.findByRole('status')
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Times'])
   })
 
   it('primeira busca falha: avisa que tenta de novo e não diz que não há jogo; o próximo poll recupera', async () => {

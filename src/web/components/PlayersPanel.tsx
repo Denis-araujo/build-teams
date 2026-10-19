@@ -214,7 +214,7 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     >
       <div className="pt-[18px] px-[18px] pb-[14px] flex flex-col gap-[14px]">
         <div className="flex items-baseline justify-between gap-2">
-          <h1 className="m-0 text-[20px] font-medium tracking-[-0.01em]">Jogadores</h1>
+          <h2 className="m-0 text-[20px] font-medium tracking-[-0.01em]">Jogadores</h2>
           <span className="text-[13px] text-neutral-400 tabular-nums">
             {paidCount} de {players.length} pagaram
           </span>
