@@ -174,15 +174,15 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.get('/admin/game', async (c) => c.json(await getActiveGame(c.env.DB)))
 
   app.post('/admin/game', async (c) => {
-    const { date } = await readBody(c)
-    if (typeof date !== 'string') throw bad()
-    return c.json(await createGame(c.env.DB, date, now()), 201)
+    const { date, time } = await readBody(c)
+    if (typeof date !== 'string' || (time !== undefined && typeof time !== 'string')) throw bad()
+    return c.json(await createGame(c.env.DB, date, now(), time), 201)
   })
 
   app.patch('/admin/game', async (c) => {
-    const { date } = await readBody(c)
-    if (typeof date !== 'string') throw bad()
-    return c.json(await updateGameDate(c.env.DB, date, now()))
+    const { date, time } = await readBody(c)
+    if (typeof date !== 'string' || (time !== undefined && typeof time !== 'string')) throw bad()
+    return c.json(await updateGameDate(c.env.DB, date, now(), time))
   })
 
   app.delete('/admin/game', async (c) => {

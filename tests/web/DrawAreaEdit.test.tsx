@@ -21,7 +21,7 @@ const DRAW = (over: Partial<DrawState> = {}): DrawState => ({
   locks: {},
   ...over,
 })
-const GAME = (draw: DrawState | null): Game => ({ id: 'g', date: '2026-10-24', paid: PAID, draw })
+const GAME = (draw: DrawState | null): Game => ({ id: 'g', date: '2026-10-24', time: '19:00', paid: PAID, draw })
 const respond = (status: number, body?: unknown) =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
 

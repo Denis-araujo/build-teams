@@ -43,3 +43,20 @@ describe('buildWhatsAppText', () => {
     expect(text.endsWith('2. Lucas')).toBe(true);
   });
 });
+
+describe('buildWhatsAppText com hora', () => {
+  const input = {
+    date: '2026-10-17',
+    teams: [[{ name: 'Rafael', rating: 4.5 }]],
+    reserves: [],
+    includeStars: false,
+  };
+  it('termina a linha do dia em " às HH:MM"', () => {
+    expect(buildWhatsAppText({ ...input, time: '19:00' }).split('\n')[1]).toBe(
+      'Sábado, 17/10 às 19:00 · 1 jogador',
+    );
+  });
+  it('sem hora mantém a linha como antes', () => {
+    expect(buildWhatsAppText(input).split('\n')[1]).toBe('Sábado, 17/10 · 1 jogador');
+  });
+});

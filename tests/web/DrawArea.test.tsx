@@ -12,7 +12,7 @@ afterEach(() => {
 
 const P = (id: string, name: string, rating: number): Player => ({ id, name, rating, archived: false })
 const PLAYERS = [P('a', 'Ana', 4), P('b', 'Bia', 3), P('c', 'Cris', 2), P('d', 'Duda', 5), P('e', 'Edu', 1), P('f', 'Ana', 3)]
-const GAME = (paid: string[], draw: DrawState | null = null): Game => ({ id: 'g', date: '2026-10-24', paid, draw })
+const GAME = (paid: string[], draw: DrawState | null = null): Game => ({ id: 'g', date: '2026-10-24', time: '19:00', paid, draw })
 
 function respond(status: number, body?: unknown) {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as Response

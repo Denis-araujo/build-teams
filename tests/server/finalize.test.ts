@@ -10,6 +10,7 @@ const expired = new Date('2026-10-20T03:00:00Z')
 
 type Snapshot = {
   date: string
+  time: string
   finishedAt: string
   config: { teamCount: number; teamSize: number }
   players: { id: string; name: string; rating: number; paid: boolean }[]
@@ -138,5 +139,15 @@ describe('finalizeIfExpired', () => {
     const snap = JSON.parse((await historyRows(db))[0]!.snapshot_json) as Snapshot
     expect(snap.teams).toEqual([])
     expect(snap.reserves).toEqual([])
+  })
+})
+
+describe('snapshot time', () => {
+  it('stores the game time in the snapshot', async () => {
+    const db = createTestDb()
+    await createGame(db, '2026-10-19', created, '20:30')
+    await finalizeIfExpired(db, expired)
+    const { results } = await db.prepare('SELECT snapshot_json FROM history').all<{ snapshot_json: string }>()
+    expect((JSON.parse(results[0]!.snapshot_json) as Snapshot).time).toBe('20:30')
   })
 })

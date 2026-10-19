@@ -44,6 +44,51 @@ describe('games', () => {
     await expect(createGame(db, 'abc', now)).rejects.toThrow(ValidationError)
   })
 
+  it('defaults the time to 19:00 and stores an explicit one', async () => {
+    const { game } = await setup()
+    expect(game.time).toBe('19:00')
+    const db = createTestDb()
+    const g = await createGame(db, '2026-10-20', now, '20:30')
+    expect(g.time).toBe('20:30')
+    expect((await getActiveGame(db))?.time).toBe('20:30')
+  })
+
+  it('rejects an invalid time', async () => {
+    const db = createTestDb()
+    await expect(createGame(db, '2026-10-20', now, '25:00')).rejects.toThrow('Hora inválida')
+    await expect(createGame(db, '2026-10-20', now, '')).rejects.toThrow('Hora inválida')
+  })
+
+  it('rejects a moment that already passed', async () => {
+    const db = createTestDb()
+    // 15:00Z = 12:00 em Brasília
+    await expect(createGame(db, '2026-10-19', now, '11:59')).rejects.toThrow(
+      'Escolha um dia e uma hora que ainda não passaram.',
+    )
+    expect((await createGame(db, '2026-10-19', now, '12:00')).time).toBe('12:00')
+  })
+
+  it('updateGameDate with time changes the hour, without keeps it', async () => {
+    const { db, a } = await setup()
+    await setPaid(db, a.id, true)
+    const g1 = await updateGameDate(db, '2026-10-20', now, '21:15')
+    expect(g1).toMatchObject({ date: '2026-10-20', time: '21:15', paid: [a.id] })
+    const g2 = await updateGameDate(db, '2026-10-25', now)
+    expect(g2).toMatchObject({ date: '2026-10-25', time: '21:15' })
+    await expect(updateGameDate(db, '2026-10-25', now, '99:99')).rejects.toThrow('Hora inválida')
+  })
+
+  it('updateGameDate without time validates the moment with the stored time', async () => {
+    const db = createTestDb()
+    await createGame(db, '2026-10-20', now, '10:00')
+    // 2026-10-19 10:00 já passou às 12:00 de Brasília
+    await expect(updateGameDate(db, '2026-10-19', now)).rejects.toThrow(
+      'Escolha um dia e uma hora que ainda não passaram.',
+    )
+    expect((await getActiveGame(db))?.date).toBe('2026-10-20')
+    expect((await updateGameDate(db, '2026-10-19', now, '13:00')).time).toBe('13:00')
+  })
+
   it('rejects a second active game', async () => {
     const { db } = await setup()
     await expect(createGame(db, '2026-10-21', now)).rejects.toThrow('Já existe um jogo ativo')

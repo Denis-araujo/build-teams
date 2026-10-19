@@ -12,6 +12,7 @@ function respond(body: unknown, ok = true, status = 200) {
 function game(over: Partial<PublicGame> = {}): PublicGame {
   return {
     date: '2026-10-17',
+    time: '19:00',
     showStars: false,
     players: [
       { id: 'p1', name: 'Rafael', paid: true },

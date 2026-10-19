@@ -14,7 +14,7 @@ function respond(status: number, body?: unknown) {
 
 const ANA: Player = { id: 'p1', name: 'Ana', rating: 4, archived: false }
 const BIA: Player = { id: 'p2', name: 'Bia', rating: 2.5, archived: false }
-const GAME: Game = { id: 'g1', date: '2026-10-24', paid: [], draw: null }
+const GAME: Game = { id: 'g1', date: '2026-10-24', time: '19:00', paid: [], draw: null }
 
 function setup(routes: Routes) {
   const fetchMock = vi.fn(async (path: string, init: RequestInit = {}) => {

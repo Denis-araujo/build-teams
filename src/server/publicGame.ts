@@ -33,5 +33,5 @@ export async function getPublicGame(db: D1Database, now: Date): Promise<PublicGa
   const teams = showStars ? storedTeams : storedTeams.map((t) => [...t].sort(byName))
   const reserves = showStars ? storedReserves : [...storedReserves].sort(byName)
 
-  return { date: game.date, showStars, players, teams, reserves }
+  return { date: game.date, time: game.time, showStars, players, teams, reserves }
 }

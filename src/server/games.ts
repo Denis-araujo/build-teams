@@ -1,5 +1,5 @@
 import type { DrawState, Game } from '../shared/types'
-import { isGameDateAllowed } from '../shared/dates'
+import { isGameMomentAllowed, isValidCalendarDate, isValidGameTime } from '../shared/dates'
 import { validateDrawState } from '../shared/drawValidation'
 import { NotFoundError, ValidationError } from './errors'
 import { safeParseDraw } from './draw-json'
@@ -7,7 +7,7 @@ import { archivePlayer } from './players'
 
 export type { Game }
 
-type GameRow = { id: string; date: string; draw_json: string | null; revision: number }
+type GameRow = { id: string; date: string; game_time: string; draw_json: string | null; revision: number }
 type Loaded = Game & { revision: number }
 
 const CHANGED = 'Os pagamentos ou o sorteio mudaram. Tente de novo.'
@@ -19,7 +19,7 @@ const DEFAULT_TEAM_SIZE = 6
 
 async function loadActive(db: D1Database): Promise<Loaded | null> {
   const row = await db
-    .prepare("SELECT id, date, draw_json, revision FROM games WHERE state = 'active'")
+    .prepare("SELECT id, date, game_time, draw_json, revision FROM games WHERE state = 'active'")
     .first<GameRow>()
   if (!row) return null
   const { results } = await db
@@ -29,6 +29,7 @@ async function loadActive(db: D1Database): Promise<Loaded | null> {
   return {
     id: row.id,
     date: row.date,
+    time: row.game_time,
     revision: row.revision,
     paid: results.map((r) => r.player_id),
     draw: safeParseDraw(row.draw_json),
@@ -41,8 +42,8 @@ async function requireActive(db: D1Database): Promise<Loaded> {
   return game
 }
 
-function publicGame({ id, date, paid, draw }: Loaded): Game {
-  return { id, date, paid, draw }
+function publicGame({ id, date, time, paid, draw }: Loaded): Game {
+  return { id, date, time, paid, draw }
 }
 
 export async function getActiveGame(db: D1Database): Promise<Game | null> {
@@ -54,19 +55,30 @@ export function isUniqueViolation(err: unknown): boolean {
   return err instanceof Error && /UNIQUE constraint failed/i.test(err.message)
 }
 
-function assertDate(date: string, now: Date): void {
-  if (!isGameDateAllowed(date, now)) throw new ValidationError('Data inválida ou no passado')
+const DEFAULT_TIME = '19:00'
+
+function assertMoment(date: string, time: string, now: Date): void {
+  if (!isValidCalendarDate(date)) throw new ValidationError('Data inválida')
+  if (!isValidGameTime(time)) throw new ValidationError('Hora inválida')
+  if (!isGameMomentAllowed(date, time, now)) {
+    throw new ValidationError('Escolha um dia e uma hora que ainda não passaram.')
+  }
 }
 
-export async function createGame(db: D1Database, date: string, now: Date): Promise<Game> {
-  assertDate(date, now)
+export async function createGame(
+  db: D1Database,
+  date: string,
+  now: Date,
+  time: string = DEFAULT_TIME,
+): Promise<Game> {
+  assertMoment(date, time, now)
   if (await loadActive(db)) throw new ValidationError('Já existe um jogo ativo')
   try {
     await db
       .prepare(
-        "INSERT INTO games (id, date, state, team_count, team_size) VALUES (?, ?, 'active', ?, ?)",
+        "INSERT INTO games (id, date, game_time, state, team_count, team_size) VALUES (?, ?, ?, 'active', ?, ?)",
       )
-      .bind(crypto.randomUUID(), date, DEFAULT_TEAM_COUNT, DEFAULT_TEAM_SIZE)
+      .bind(crypto.randomUUID(), date, time, DEFAULT_TEAM_COUNT, DEFAULT_TEAM_SIZE)
       .run()
   } catch (err) {
     // O índice único parcial é a rede de segurança contra corrida.
@@ -78,12 +90,18 @@ export async function createGame(db: D1Database, date: string, now: Date): Promi
   return publicGame(await requireActive(db))
 }
 
-export async function updateGameDate(db: D1Database, date: string, now: Date): Promise<Game> {
-  assertDate(date, now)
+export async function updateGameDate(
+  db: D1Database,
+  date: string,
+  now: Date,
+  time?: string,
+): Promise<Game> {
   const game = await requireActive(db)
+  const nextTime = time ?? game.time
+  assertMoment(date, nextTime, now)
   await db
-    .prepare('UPDATE games SET date = ?, revision = revision + 1 WHERE id = ?')
-    .bind(date, game.id)
+    .prepare('UPDATE games SET date = ?, game_time = ?, revision = revision + 1 WHERE id = ?')
+    .bind(date, nextTime, game.id)
     .run()
   return publicGame(await requireActive(db))
 }

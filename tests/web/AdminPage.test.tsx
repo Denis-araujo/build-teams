@@ -12,7 +12,7 @@ function respond(status: number, body?: unknown) {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as Response
 }
 
-const GAME: Game = { id: 'g1', date: '2026-10-24', paid: [], draw: null }
+const GAME: Game = { id: 'g1', date: '2026-10-24', time: '19:00', paid: [], draw: null }
 
 function setup(routes: Routes) {
   const fetchMock = vi.fn(async (path: string, init: RequestInit = {}) => {

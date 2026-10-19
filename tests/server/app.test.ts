@@ -390,3 +390,48 @@ describe('robustez', () => {
     expect((await login('segredo', '1.1.1.1')).status).toBe(200)
   })
 })
+
+describe('game time routes', () => {
+  it('POST accepts a time and returns it; GET includes it', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    const res = await send('POST', '/admin/game', { date: TODAY, time: '20:30' }, cookie)
+    expect(res.status).toBe(201)
+    expect(((await res.json()) as { time: string }).time).toBe('20:30')
+    const got = await send('GET', '/admin/game', undefined, cookie)
+    expect(((await got.json()) as { time: string }).time).toBe('20:30')
+  })
+
+  it('POST without time defaults to 19:00', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    const res = await send('POST', '/admin/game', { date: TODAY }, cookie)
+    expect(((await res.json()) as { time: string }).time).toBe('19:00')
+  })
+
+  it('rejects an invalid, non-string or past time with 400', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    const invalid = await send('POST', '/admin/game', { date: TODAY, time: '25:00' }, cookie)
+    expect(invalid.status).toBe(400)
+    expect(((await invalid.json()) as { error: string }).error).toBe('Hora inválida')
+    const nonString = await send('POST', '/admin/game', { date: TODAY, time: 1900 }, cookie)
+    expect(nonString.status).toBe(400)
+    expect(((await nonString.json()) as { error: string }).error).toBe('Corpo inválido')
+    const past = await send('POST', '/admin/game', { date: TODAY, time: '11:00' }, cookie)
+    expect(past.status).toBe(400)
+    expect(((await past.json()) as { error: string }).error).toBe(
+      'Escolha um dia e uma hora que ainda não passaram.',
+    )
+  })
+
+  it('PATCH updates the hour and validates it', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    await send('POST', '/admin/game', { date: TODAY }, cookie)
+    const ok = await send('PATCH', '/admin/game', { date: TODAY, time: '21:00' }, cookie)
+    expect(((await ok.json()) as { time: string }).time).toBe('21:00')
+    expect((await send('PATCH', '/admin/game', { date: TODAY, time: '7:5' }, cookie)).status).toBe(400)
+    expect((await send('PATCH', '/admin/game', { date: TODAY, time: null }, cookie)).status).toBe(400)
+  })
+})

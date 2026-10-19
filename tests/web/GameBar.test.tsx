@@ -6,7 +6,7 @@ import type { Game } from '../../src/shared/types'
 
 afterEach(cleanup)
 
-const G1: Game = { id: 'g1', date: '2026-10-24', paid: [], draw: null }
+const G1: Game = { id: 'g1', date: '2026-10-24', time: '19:00', paid: [], draw: null }
 
 it('sincroniza o campo de data quando o jogo ativo muda', () => {
   const noop = () => {}

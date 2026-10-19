@@ -2,13 +2,13 @@ import { isGameExpired } from '../shared/dates'
 import { safeParseDraw } from './draw-json'
 import { listPlayers } from './players'
 
-type GameRow = { id: string; date: string; draw_json: string | null; team_count: number; team_size: number }
+type GameRow = { id: string; date: string; game_time: string; draw_json: string | null; team_count: number; team_size: number }
 
 // Finaliza o jogo ativo se a data já passou (America/Sao_Paulo).
 // Devolve true só para o chamador cujo INSERT em history gravou a linha.
 export async function finalizeIfExpired(db: D1Database, now: Date): Promise<boolean> {
   const game = await db
-    .prepare("SELECT id, date, draw_json, team_count, team_size FROM games WHERE state = 'active'")
+    .prepare("SELECT id, date, game_time, draw_json, team_count, team_size FROM games WHERE state = 'active'")
     .first<GameRow>()
   if (!game || !isGameExpired(game.date, now)) return false
 
@@ -25,6 +25,7 @@ export async function finalizeIfExpired(db: D1Database, now: Date): Promise<bool
   const finishedAt = now.toISOString()
   const snapshot = {
     date: game.date,
+    time: game.game_time,
     finishedAt,
     config: {
       teamCount: draw?.teamCount ?? game.team_count,

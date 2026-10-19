@@ -10,10 +10,11 @@ export type DrawState = {
 
 export type PublicGame = {
   date: string;
+  time: string;
   showStars: boolean;
   players: { id: string; name: string; paid: boolean; rating?: number }[];
   teams: string[][];
   reserves: string[];
 };
 
-export type Game = { id: string; date: string; paid: string[]; draw: DrawState | null };
+export type Game = { id: string; date: string; time: string; paid: string[]; draw: DrawState | null };

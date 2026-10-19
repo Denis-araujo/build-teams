@@ -9,6 +9,7 @@ CREATE TABLE players (
 CREATE TABLE games (
   id TEXT PRIMARY KEY,
   date TEXT NOT NULL,
+  game_time TEXT NOT NULL DEFAULT '19:00',
   state TEXT NOT NULL,
   team_count INTEGER NOT NULL,
   team_size INTEGER NOT NULL,

@@ -181,3 +181,16 @@ describe('getPublicGame', () => {
     })
   })
 })
+
+describe('getPublicGame time', () => {
+  it('returns the time and still hides ratings when stars are hidden', async () => {
+    const db = createTestDb()
+    const a = await createPlayer(db, { name: 'Ana', rating: 3.5 })
+    await createGame(db, '2026-10-19', created, '20:30')
+    await setPaid(db, a.id, true)
+    const game = await getPublicGame(db, created)
+    expect(game?.time).toBe('20:30')
+    expect(game?.showStars).toBe(false)
+    expect(game?.players.every((p) => !('rating' in p))).toBe(true)
+  })
+})

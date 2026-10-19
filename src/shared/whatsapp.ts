@@ -5,6 +5,7 @@ interface WhatsAppPlayer {
 
 export interface WhatsAppTextInput {
   date: string; // YYYY-MM-DD
+  time?: string; // HH:MM
   teams: WhatsAppPlayer[][];
   reserves: WhatsAppPlayer[];
   includeStars: boolean;
@@ -30,7 +31,7 @@ export function buildWhatsAppText(input: WhatsAppTextInput): string {
   const total = input.teams.reduce((n, t) => n + t.length, 0);
   const lines = [
     '🏐 *Escalação · Vôlei*',
-    `${dayLabel(input.date)} · ${total} ${total === 1 ? 'jogador' : 'jogadores'}`,
+    `${dayLabel(input.date)}${input.time ? ` às ${input.time}` : ''} · ${total} ${total === 1 ? 'jogador' : 'jogadores'}`,
     '',
   ];
   input.teams.forEach((team, ti) => {

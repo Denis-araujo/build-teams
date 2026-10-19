@@ -10,7 +10,7 @@ afterEach(() => {
 })
 
 const res = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response
-const OLD: Game = { id: 'g1', date: '2026-10-24', paid: [], draw: null }
+const OLD: Game = { id: 'g1', date: '2026-10-24', time: '19:00', paid: [], draw: null }
 const FRESH: Game = { ...OLD, paid: ['p1'] }
 
 it('um reload antigo não sobrescreve o estado definido por uma mutação mais nova', async () => {
