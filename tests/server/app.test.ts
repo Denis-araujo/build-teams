@@ -7,7 +7,11 @@ const TODAY = '2026-10-19'
 const JSON_H = { 'Content-Type': 'application/json' }
 
 function setup(over: Record<string, unknown> = {}) {
-  const app = createApp({ now: () => NOW })
+  let current = NOW
+  const setNow = (d: Date) => {
+    current = d
+  }
+  const app = createApp({ now: () => current })
   const env = { DB: createTestDb(), ADMIN_PASSWORD: 'segredo', SESSION_SECRET: 'chave-longa', ...over }
   const call = (path: string, init: RequestInit = {}) => app.request(`/api${path}`, init, env)
   const send = async (method: string, path: string, body?: unknown, cookie?: string, ip?: string) =>
@@ -25,7 +29,7 @@ function setup(over: Record<string, unknown> = {}) {
     const res = await login()
     return (res.headers.get('Set-Cookie') ?? '').split(';')[0]!
   }
-  return { env, call, send, login, session }
+  return { env, call, send, login, session, setNow, app }
 }
 
 const ADMIN_ROUTES: [string, string][] = [
@@ -284,5 +288,105 @@ describe('configurações e histórico', () => {
     const res = await send('GET', '/admin/history', undefined, await session())
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([])
+  })
+})
+
+const AFTER_END = new Date('2026-10-20T03:00:00Z')
+const historyCount = async (db: D1Database) =>
+  (await db.prepare('SELECT COUNT(*) AS n FROM history').first<{ n: number }>())!.n
+
+describe('finalização em qualquer requisição', () => {
+  async function withGame() {
+    const s = setup()
+    const cookie = await s.session()
+    await s.send('POST', '/admin/game', { date: TODAY }, cookie)
+    return { ...s, cookie }
+  }
+
+  it('antes do fim o jogo fica intacto', async () => {
+    const { send, cookie, env } = await withGame()
+    expect(((await (await send('GET', '/admin/game', undefined, cookie)).json()) as { date: string }).date).toBe(TODAY)
+    expect(await historyCount(env.DB)).toBe(0)
+  })
+
+  it('depois do fim, POST /admin/game cria novo jogo e o histórico lista o antigo', async () => {
+    const { send, cookie, setNow } = await withGame()
+    setNow(AFTER_END)
+    expect((await send('POST', '/admin/game', { date: '2026-10-25' }, cookie)).status).toBe(201)
+    const hist = (await (await send('GET', '/admin/history', undefined, cookie)).json()) as { gameDate: string }[]
+    expect(hist.map((h) => h.gameDate)).toEqual([TODAY])
+  })
+
+  it('depois do fim, GET /admin/game -> null e PUT paid -> 404', async () => {
+    const { send, cookie, setNow } = await withGame()
+    const p = (await (await send('POST', '/admin/players', { name: 'Ana', rating: 3 }, cookie)).json()) as { id: string }
+    setNow(AFTER_END)
+    expect(await (await send('GET', '/admin/game', undefined, cookie)).json()).toBeNull()
+    expect((await send('PUT', '/admin/game/paid', { playerId: p.id, paid: true }, cookie)).status).toBe(404)
+  })
+
+  it('requisição sem cookie (401) também finaliza', async () => {
+    const { send, setNow, env } = await withGame()
+    setNow(AFTER_END)
+    expect((await send('GET', '/admin/me')).status).toBe(401)
+    expect(await historyCount(env.DB)).toBe(1)
+  })
+})
+
+describe('robustez', () => {
+  it('throw que não é Error -> 500 genérico com no-store', async () => {
+    const { app, env } = setup()
+    const db = {
+      prepare: () => {
+        throw 'boom'
+      },
+    } as unknown as D1Database
+    const res = await app.request('/api/game', {}, { ...env, DB: db })
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'Erro interno' })
+    expect(res.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('draw acima dos limites -> 400', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    const base = { teamCount: 2, teamSize: 2, teams: [[]], reserves: [], locks: {} }
+    const locks = Object.fromEntries(Array.from({ length: 201 }, (_, i) => [`k${i}`, 1]))
+    for (const body of [
+      { ...base, locks },
+      { ...base, teams: Array.from({ length: 9 }, () => []) },
+      { ...base, teams: [Array.from({ length: 101 }, (_, i) => `p${i}`)] },
+      { ...base, reserves: Array.from({ length: 101 }, (_, i) => `p${i}`) },
+    ]) {
+      const res = await send('PUT', '/admin/game/draw', body, cookie)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({ error: 'Corpo inválido' })
+    }
+  })
+
+  it('cookie válido com ADMIN_PASSWORD vazio ou ausente -> 401', async () => {
+    const { app, env, session } = setup()
+    const cookie = await session()
+    for (const pw of ['', undefined]) {
+      const res = await app.request('/api/admin/me', { headers: { Cookie: cookie } }, { ...env, ADMIN_PASSWORD: pw })
+      expect(res.status).toBe(401)
+    }
+  })
+
+  it('PATCH /admin/players/:id com sucesso', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    const p = (await (await send('POST', '/admin/players', { name: 'Ana', rating: 3 }, cookie)).json()) as { id: string }
+    const res = await send('PATCH', `/admin/players/${p.id}`, { name: 'Ana Maria', rating: 4.5 }, cookie)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ id: p.id, name: 'Ana Maria', rating: 4.5 })
+  })
+
+  it('bloqueio 429 expira após 15 minutos', async () => {
+    const { login, setNow } = setup()
+    for (let i = 0; i < 5; i++) await login('errada', '1.1.1.1')
+    expect((await login('segredo', '1.1.1.1')).status).toBe(429)
+    setNow(new Date(NOW.getTime() + 15 * 60_000 + 1000))
+    expect((await login('segredo', '1.1.1.1')).status).toBe(200)
   })
 })

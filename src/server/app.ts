@@ -13,6 +13,7 @@ import {
   verifySession,
 } from './auth'
 import { NotFoundError, ValidationError } from './errors'
+import { finalizeIfExpired } from './finalize'
 import {
   createGame,
   deleteActiveGame,
@@ -31,6 +32,9 @@ type Env = { Bindings: { DB: D1Database; ADMIN_PASSWORD: string; SESSION_SECRET:
 type Ctx = Context<Env>
 
 const BAD_BODY = 'Corpo inválido'
+const MAX_TEAMS = 8
+const MAX_IDS = 100
+const MAX_LOCKS = 200
 const bad = () => new ValidationError(BAD_BODY)
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -53,8 +57,10 @@ function parseDraw(b: Record<string, unknown>): DrawState {
   const { teamCount, teamSize, teams, reserves, locks } = b
   if (typeof teamCount !== 'number' || typeof teamSize !== 'number') throw bad()
   if (!Array.isArray(teams) || !teams.every(isStringArray)) throw bad()
-  if (!isStringArray(reserves)) throw bad()
-  if (!isObject(locks) || !Object.values(locks).every((v) => Number.isInteger(v))) throw bad()
+  if (teams.length > MAX_TEAMS || teams.some((t) => t.length > MAX_IDS)) throw bad()
+  if (!isStringArray(reserves) || reserves.length > MAX_IDS) throw bad()
+  if (!isObject(locks) || Object.keys(locks).length > MAX_LOCKS) throw bad()
+  if (!Object.values(locks).every((v) => Number.isInteger(v))) throw bad()
   return { teamCount, teamSize, teams, reserves, locks: locks as Record<string, number> }
 }
 
@@ -65,6 +71,21 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.use('*', async (c, next) => {
     await next()
     c.header('Cache-Control', 'no-store')
+  })
+
+  // Hono só encaminha `instanceof Error` ao onError; normaliza qualquer outro throw.
+  app.use('*', async (_c, next) => {
+    try {
+      await next()
+    } catch (e) {
+      throw e instanceof Error ? e : new Error(String(e))
+    }
+  })
+
+  // Primeira requisição (de qualquer pessoa) após o fim do jogo o finaliza.
+  app.use('*', async (c, next) => {
+    await finalizeIfExpired(c.env.DB, now())
+    return next()
   })
 
   app.onError((err, c) => {
