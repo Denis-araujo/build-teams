@@ -1,9 +1,9 @@
-import type { DrawState } from '../shared/types'
+import type { DrawState, Game } from '../shared/types'
 import { isGameDateAllowed } from '../shared/dates'
 import { validateDrawState } from '../shared/drawValidation'
 import { NotFoundError, ValidationError } from './errors'
 
-export type Game = { id: string; date: string; paid: string[]; draw: DrawState | null }
+export type { Game }
 
 type GameRow = { id: string; date: string; draw_json: string | null; revision: number }
 type Loaded = Game & { revision: number }

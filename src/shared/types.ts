@@ -15,3 +15,5 @@ export type PublicGame = {
   teams: string[][];
   reserves: string[];
 };
+
+export type Game = { id: string; date: string; paid: string[]; draw: DrawState | null };

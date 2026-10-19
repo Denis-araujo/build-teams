@@ -1,9 +1,22 @@
-import type { PublicGame } from '../shared/types'
+import type { Game, PublicGame } from '../shared/types'
+
+export type Settings = { memberSeesStars: boolean }
 
 export class UnauthorizedError extends Error {
   constructor(message = 'Não autorizado') {
     super(message)
     this.name = 'UnauthorizedError'
+  }
+}
+
+export class HttpError extends Error {
+  status: number
+  serverMessage?: string
+  constructor(message: string, status: number, serverMessage?: string) {
+    super(message)
+    this.name = 'HttpError'
+    this.status = status
+    this.serverMessage = serverMessage
   }
 }
 
@@ -16,7 +29,18 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   const res = await fetch(path, { ...init, headers, credentials: 'same-origin' })
   if (res.status === 401) throw new UnauthorizedError()
   if (!res.ok) {
-    throw new Error(`Falha na requisição ${init.method ?? 'GET'} ${path} (${res.status})`)
+    let serverMessage: string | undefined
+    try {
+      const body = (await res.json()) as { error?: unknown } | null
+      if (body && typeof body.error === 'string') serverMessage = body.error
+    } catch {
+      // corpo ausente ou não-JSON
+    }
+    throw new HttpError(
+      `Falha na requisição ${init.method ?? 'GET'} ${path} (${res.status})`,
+      res.status,
+      serverMessage,
+    )
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
@@ -24,4 +48,29 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 
 export const api = {
   getGame: () => request<PublicGame | null>('/api/game'),
+
+  login: (password: string) =>
+    request<{ ok: true }>('/api/admin/login', { method: 'POST', body: JSON.stringify({ password }) }),
+  logout: () => request<{ ok: true }>('/api/admin/logout', { method: 'POST' }),
+  me: async (): Promise<boolean> => {
+    try {
+      await request<unknown>('/api/admin/me')
+      return true
+    } catch (e) {
+      if (e instanceof UnauthorizedError) return false
+      throw e
+    }
+  },
+  getAdminGame: () => request<Game | null>('/api/admin/game'),
+  createGame: (date: string) =>
+    request<Game>('/api/admin/game', { method: 'POST', body: JSON.stringify({ date }) }),
+  updateGameDate: (date: string) =>
+    request<Game>('/api/admin/game', { method: 'PATCH', body: JSON.stringify({ date }) }),
+  deleteGame: () => request<void>('/api/admin/game', { method: 'DELETE' }),
+  getSettings: () => request<Settings>('/api/admin/settings'),
+  setMemberSeesStars: (memberSeesStars: boolean) =>
+    request<Settings>('/api/admin/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ memberSeesStars }),
+    }),
 }
