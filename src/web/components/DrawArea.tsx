@@ -18,7 +18,11 @@ type Props = {
   onUnauthorized(): void
 }
 
-const HIGHLIGHT = '0 0 0 1px var(--color-accent), 0 0 24px var(--color-accent-800)'
+const HIGHLIGHT_TEAM = '0 0 0 2px var(--color-accent), 0 8px 24px rgba(36,54,90,0.18)'
+const HIGHLIGHT_RESERVES = '0 0 0 2px var(--color-accent)'
+
+const MOVE_SELECT =
+  'order-3 h-[26px] w-[92px] cursor-pointer rounded-sm border-0 bg-surface px-1 text-xs text-text shadow-sm aria-disabled:cursor-not-allowed aria-disabled:opacity-50'
 const LOCK_ON =
   'M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-68-56a12,12,0,1,1-12-12A12,12,0,0,1,140,152Z'
 const LOCK_OFF =
@@ -156,7 +160,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
       endDrag()
       if (id) moveTo(id, target)
     },
-    style: over === target ? { boxShadow: HIGHLIGHT } : undefined,
+    style: over === target ? { boxShadow: target === 'reserves' ? HIGHLIGHT_RESERVES : HIGHLIGHT_TEAM } : undefined,
   })
   const rowDrop = (targetId: string) => ({
     onDragOver: (e: DragEvent) => {
@@ -181,7 +185,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
     const current = teamIndex < 0 ? 'reserves' : String(teamIndex)
     return (
       <select
-        className="move-select"
+        className={MOVE_SELECT}
         aria-label={`Mover ${p.name} para`}
         aria-disabled={busy}
         data-player-id={p.id}
@@ -216,27 +220,20 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
   const cannotDraw = busy || paidPlayers.length < config.teamCount
 
   return (
-    <section ref={rootRef} className="draw-area" aria-label="Times" aria-busy={busy}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16, justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>Times</h1>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-neutral-400)' }}>
-            {draw && tag ? (
-              <>
-                <span>
-                  Diferença entre o mais forte e o mais fraco: {fmt(spread)} ★{sameSizes ? '' : ' (média por jogador)'}
-                </span>
-                <span className={`tag${tag.tone === 'good' ? ' tag-good' : ''}`}>{tag.label}</span>
-              </>
-            ) : (
-              <span>Os times aparecem aqui depois do sorteio</span>
-            )}
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+    <section
+      ref={rootRef}
+      className="flex min-w-0 flex-[3_1_520px] flex-col gap-5"
+      aria-label="Times"
+      aria-busy={busy}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="m-0 text-[32px] font-medium tracking-[-0.02em]">Times</h1>
+          <span className="rounded-full bg-surface px-[10px] py-1 text-[13px] text-neutral-400 shadow-sm tabular-nums">
             {config.teamCount} times · {config.teamSize} por time
           </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {draw && (
             <button
               type="button"
@@ -259,18 +256,39 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
           </button>
         </div>
       </div>
-      {!game && <span style={{ fontSize: 13, color: 'var(--color-neutral-500)' }}>Cadastre a data do jogo primeiro</span>}
+      {!game && <span className="-mt-3 text-xs text-neutral-500">Cadastre a data do jogo primeiro</span>}
+      <div className="flex flex-wrap items-center gap-2 text-[13px] text-neutral-400">
+        {draw && tag ? (
+          <>
+            <span>
+              Diferença entre o mais forte e o mais fraco: {fmt(spread)} ★{sameSizes ? '' : ' (média por jogador)'}
+            </span>
+            <span
+              className={`rounded-full px-[9px] py-[3px] text-xs font-medium ${
+                tag.tone === 'good' ? 'bg-gold-tint text-gold-ink shadow-[inset_0_0_0_1px_var(--gold-soft)]' : 'bg-bg text-text'
+              }`}
+            >
+              {tag.label}
+            </span>
+          </>
+        ) : (
+          <span>Os times aparecem aqui depois do sorteio</span>
+        )}
+      </div>
 
       {error && (
-        <p className="form-error" role="alert">
+        <p
+          className="m-0 rounded-sm bg-gold-tint px-3 py-2 text-[13px] text-gold-ink shadow-[inset_0_0_0_1px_var(--gold-soft)]"
+          role="alert"
+        >
           {error}
         </p>
       )}
 
       {!draw ? (
-        <div className="empty">
-          <span style={{ fontSize: 16 }}>Nenhum time montado ainda</span>
-          <span style={{ fontSize: 14, color: 'var(--color-neutral-400)' }}>
+        <div className="flex flex-col gap-[6px] rounded-lg bg-surface p-7 shadow-sm">
+          <span className="text-xl font-medium tracking-[-0.01em]">Nenhum time montado ainda</span>
+          <span className="max-w-[520px] text-sm text-neutral-400 text-pretty">
             Marque quem pagou, clique em Montar times e escolha quantos times e quantos jogadores por time. As estrelas são distribuídas para os times ficarem o mais parelhos possível. Quem passar das vagas vira reserva.
           </span>
         </div>
@@ -282,7 +300,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
             cardProps={(i) => dropTarget(i)}
             rowProps={({ player }) => ({
               ...draggable(player.id),
-              style: { flexWrap: 'wrap', opacity: dragId === player.id ? 0.5 : 1 },
+              style: { opacity: dragId === player.id ? 0.5 : 1 },
             })}
             renderRowExtras={({ player, teamIndex }) => {
               const locked = draw.locks[player.id] === teamIndex
@@ -290,13 +308,15 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
                 <>
                   <button
                     type="button"
-                    className="icon-btn"
+                    className={`order-1 flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-sm border-0 p-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${
+                      locked ? 'bg-gold-tint text-gold-ink' : 'bg-transparent text-neutral-600'
+                    }`}
                     aria-pressed={locked}
                     aria-label={locked ? `Destravar ${player.name}` : `Travar ${player.name} neste time`}
                     aria-disabled={busy}
                     data-player-id={player.id}
                     data-control="lock"
-                    style={{ color: locked ? 'var(--gold-ink)' : 'var(--color-neutral-500)' }}
+                    title={locked ? `Destravar ${player.name}` : `Travar ${player.name} neste time`}
                     onClick={() => void persist(() => toggleLock(draw, player.id), { id: player.id, control: 'lock' })}
                   >
                     <svg viewBox="0 0 256 256" width="14" height="14" aria-hidden="true">
@@ -313,7 +333,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
             playersById={playersById}
             showEmpty={dragId !== null}
             barProps={dropTarget('reserves')}
-            chipProps={(p) => ({ ...draggable(p.id), style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', opacity: dragId === p.id ? 0.5 : 1 } })}
+            chipProps={(p) => ({ ...draggable(p.id), style: { opacity: dragId === p.id ? 0.5 : 1 } })}
             renderChipExtras={(p) => moveSelect(p, -1)}
           />
           {game && hasPlaced && (
@@ -324,7 +344,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
             />
           )}
           {outside > 0 && (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--gold-ink)' }}>
+            <p className="m-0 text-xs text-gold-ink">
               {outside} {outside === 1 ? 'pagou e ficou' : 'pagaram e ficaram'} de fora — sorteie de novo para incluir.
             </p>
           )}
