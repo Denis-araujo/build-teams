@@ -113,4 +113,71 @@ describe('getPublicGame', () => {
       expect(json).not.toContain(k)
     }
   })
+
+  describe('ordering inside teams', () => {
+    async function ordered() {
+      const db = createTestDb()
+      const zeca = await createPlayer(db, { name: 'Zeca', rating: 5 })
+      const bia = await createPlayer(db, { name: 'Bia', rating: 4 })
+      const ana = await createPlayer(db, { name: 'Ana', rating: 3 })
+      const xu = await createPlayer(db, { name: 'xu', rating: 2 })
+      const li = await createPlayer(db, { name: 'Li', rating: 1 })
+      const mo = await createPlayer(db, { name: 'Mo', rating: 1.5 })
+      await createGame(db, '2026-10-19', created)
+      for (const p of [zeca, bia, ana, xu, li, mo]) await setPaid(db, p.id, true)
+      await saveDraw(db, {
+        teamCount: 2,
+        teamSize: 3,
+        teams: [
+          [zeca.id, bia.id, ana.id],
+          [xu.id, mo.id, li.id],
+        ],
+        reserves: [],
+        locks: {},
+      })
+      return { db, zeca, bia, ana, xu, li, mo }
+    }
+
+    it('orders ids by name inside teams when stars are hidden, keeping team order', async () => {
+      const { db, zeca, bia, ana, xu, li, mo } = await ordered()
+      await setSetting(db, 'member_sees_stars', false)
+      const first = await getPublicGame(db, created)
+      expect(first?.teams).toEqual([
+        [ana.id, bia.id, zeca.id],
+        [li.id, mo.id, xu.id],
+      ])
+      expect(await getPublicGame(db, created)).toEqual(first)
+    })
+
+    it('orders reserves by name when stars are hidden', async () => {
+      const db = createTestDb()
+      const ps = []
+      for (const [name, rating] of [['Zeca', 5], ['Bia', 4], ['Ana', 3], ['Dan', 2]] as const) {
+        ps.push(await createPlayer(db, { name, rating }))
+      }
+      await createGame(db, '2026-10-19', created)
+      for (const p of ps) await setPaid(db, p.id, true)
+      await saveDraw(db, {
+        teamCount: 2,
+        teamSize: 1,
+        teams: [[ps[3].id], [ps[2].id]],
+        reserves: [ps[0].id, ps[1].id],
+        locks: {},
+      })
+      await setSetting(db, 'member_sees_stars', false)
+      const r = await getPublicGame(db, created)
+      expect(r?.reserves).toEqual([ps[1].id, ps[0].id])
+      expect(r?.teams).toEqual([[ps[3].id], [ps[2].id]])
+    })
+
+    it('keeps the stored order when stars are visible', async () => {
+      const { db, zeca, bia, ana, xu, li, mo } = await ordered()
+      await setSetting(db, 'member_sees_stars', true)
+      const r = await getPublicGame(db, created)
+      expect(r?.teams).toEqual([
+        [zeca.id, bia.id, ana.id],
+        [xu.id, mo.id, li.id],
+      ])
+    })
+  })
 })

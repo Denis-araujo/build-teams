@@ -11,9 +11,9 @@ export async function getPublicGame(db: D1Database, now: Date): Promise<PublicGa
   if (!game) return null
 
   const showStars = await getSetting(db, 'member_sees_stars')
-  const teams = game.draw?.teams ?? []
-  const reserves = game.draw?.reserves ?? []
-  const inDraw = new Set<string>([...teams.flat(), ...reserves])
+  const storedTeams = game.draw?.teams ?? []
+  const storedReserves = game.draw?.reserves ?? []
+  const inDraw = new Set<string>([...storedTeams.flat(), ...storedReserves])
   const paid = new Set(game.paid)
 
   const players = (await listPlayers(db, { includeArchived: true }))
@@ -23,6 +23,15 @@ export async function getPublicGame(db: D1Database, now: Date): Promise<PublicGa
         ? { id: p.id, name: p.name, paid: paid.has(p.id), rating: p.rating }
         : { id: p.id, name: p.name, paid: paid.has(p.id) },
     )
+
+  // Com estrelas ocultas, a ordem dos ids (o sorteio ordena por nota) vazaria a força
+  // relativa; ordena por nome. A ordem dos times em si não muda.
+  const nameOf = new Map(players.map((p) => [p.id, p.name]))
+  const byName = (a: string, b: string) =>
+    (nameOf.get(a) ?? '').localeCompare(nameOf.get(b) ?? '', 'pt-BR', { sensitivity: 'base' }) ||
+    (a < b ? -1 : a > b ? 1 : 0)
+  const teams = showStars ? storedTeams : storedTeams.map((t) => [...t].sort(byName))
+  const reserves = showStars ? storedReserves : [...storedReserves].sort(byName)
 
   return { date: game.date, showStars, players, teams, reserves }
 }
