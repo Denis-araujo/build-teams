@@ -92,5 +92,4 @@ describe('nota 0,5', () => {
 
 it('fmt(0.5) mostra 0,5', () => {
   expect(fmt(0.5)).toBe('0,5')
-  expect(fmt(0.25 + 0.25)).toBe('0,5')
 })

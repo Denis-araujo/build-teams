@@ -123,6 +123,27 @@ describe('login', () => {
   })
 })
 
+describe('Limpar com sorteio', () => {
+  it('após confirmar, o Game devolvido sem sorteio mostra o estado vazio', async () => {
+    const ana = { id: 'p1', name: 'Ana', rating: 4, archived: false }
+    const draw = { teamCount: 2, teamSize: 1, teams: [['p1'], []], reserves: [], locks: {} }
+    const game = { ...GAME, paid: ['p1'], draw }
+    setup(
+      authed({
+        'GET /api/admin/game': { status: 200, body: game },
+        'GET /api/admin/players': { status: 200, body: [ana] },
+        'PUT /api/admin/game/paid-all': { status: 200, body: { ...GAME, paid: [], draw: null } },
+      }),
+    )
+    await screen.findByLabelText('Pagou: Ana')
+    expect(screen.queryByText('Nenhum time montado ainda')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar tudo' }))
+    expect(await screen.findByText('Nenhum time montado ainda')).toBeTruthy()
+    expect(screen.getByText('0 de 1 pagaram')).toBeTruthy()
+  })
+})
+
 describe('estrutura', () => {
   it('logado, o único h1 é "Times" e "Jogadores" é h2', async () => {
     setup(authed())

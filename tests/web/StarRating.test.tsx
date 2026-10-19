@@ -38,6 +38,19 @@ it('1ª estrela: metade esquerda dá 0,5 e a direita dá 1', () => {
   expect(onChange.mock.calls.map((c) => c[0])).toEqual([0.5, 1])
 })
 
+it('preenchimento com 1,5 e com valor fora do passo (2,3)', () => {
+  const widths = (v: number) => {
+    const { container, unmount } = render(<StarRating value={v} />)
+    const w = Array.from(container.querySelectorAll<HTMLElement>('div[style]')).map((d) => d.style.width)
+    unmount()
+    return w
+  }
+  expect(widths(1.5)).toEqual(['100%', '50%', '0%', '0%', '0%'])
+  const w = widths(2.3)
+  expect([w[0], w[1], w[3], w[4]]).toEqual(['100%', '100%', '0%', '0%'])
+  expect(parseFloat(w[2])).toBeCloseTo(30, 5)
+})
+
 it('3ª estrela: metade esquerda dá 2,5', () => {
   const onChange = vi.fn()
   render(<StarRating value={3} onChange={onChange} />)

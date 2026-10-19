@@ -434,11 +434,12 @@ describe('Marcar todos / Limpar', () => {
     fireEvent.click(none())
     expect(screen.getByText('O sorteio será apagado.')).toBeTruthy()
     expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
-    const card = screen.getByText('O sorteio será apagado.').parentElement as HTMLElement
-    fireEvent.click(within(card).getByRole('button', { name: 'Limpar' }))
+    const card = screen.getByRole('group', { name: 'Confirmar limpeza' })
+    fireEvent.click(within(card).getByRole('button', { name: 'Limpar tudo' }))
     expect(await screen.findByText('0 de 2 pagaram')).toBeTruthy()
     expect(body(calls(f, 'PUT /api/admin/game/paid-all')[0])).toBe('{"paid":false}')
     expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
+    expect(document.activeElement).toBe(all())
   })
 
   it('cancelar a confirmação não envia nada e devolve o foco ao Limpar', async () => {
@@ -454,8 +455,46 @@ describe('Marcar todos / Limpar', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
+  it('Esc fecha a confirmação sem enviar e devolve o foco ao Limpar', async () => {
+    const f = setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, draw: DRAW } } }))
+    await pagou('Ana')
+    const trigger = none()
+    fireEvent.click(trigger)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar' }))
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Cancelar' }), { key: 'Escape' })
+    expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
+    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('só reservas no sorteio também pede confirmação', async () => {
+    const f = setup(
+      authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, draw: { ...DRAW, teams: [[], []], reserves: ['p1'] } } } }),
+    )
+    await pagou('Ana')
+    fireEvent.click(none())
+    expect(screen.getByText('O sorteio será apagado.')).toBeTruthy()
+    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
+  })
+
+  it('a confirmação fica desabilitada enquanto uma caixa está em andamento', async () => {
+    const d = deferred()
+    setup(
+      authed({
+        'GET /api/admin/game': { status: 200, body: { ...GAME, draw: DRAW } },
+        'PUT /api/admin/game/paid': () => d.promise,
+      }),
+    )
+    const box = await pagou('Ana')
+    fireEvent.click(none())
+    fireEvent.click(box)
+    expect((screen.getByRole('button', { name: 'Limpar tudo' }) as HTMLButtonElement).disabled).toBe(true)
+    d.resolve({ status: 200, body: GAME })
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Limpar tudo' }) as HTMLButtonElement).disabled).toBe(false))
+  })
+
   it('sorteio sem ninguém alocado não pede confirmação', async () => {
-    const empty = { ...DRAW, teams: [[], []] }
+    const empty = { ...DRAW, teams: [[], []], reserves: [] }
     const f = setup(
       authed({
         'GET /api/admin/game': { status: 200, body: { ...GAME, draw: empty } },

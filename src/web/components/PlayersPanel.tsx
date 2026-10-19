@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import type { Game, Player } from '../../shared/types'
 import { formatRating, StarRating } from './StarRating'
@@ -108,8 +108,22 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
   const inFlight = useRef(new Set<string>())
   const [bulk, setBulk] = useState(false)
   const bulkBusy = useRef(false)
-  const [confirmingClear, setConfirmingClear] = useState(false)
+  // Guarda o id do jogo para a confirmação sumir se o jogo mudar ou desaparecer.
+  const [confirmingFor, setConfirmingFor] = useState<string | null>(null)
+  const confirmingClear = confirmingFor !== null && game?.id === confirmingFor
   const clearBtn = useRef<HTMLButtonElement>(null)
+  const allBtn = useRef<HTMLButtonElement>(null)
+  const cancelBtn = useRef<HTMLButtonElement>(null)
+  const [focusAll, setFocusAll] = useState(false)
+  useLayoutEffect(() => {
+    if (confirmingClear) cancelBtn.current?.focus()
+  }, [confirmingClear])
+  useLayoutEffect(() => {
+    if (focusAll && !bulk) {
+      allBtn.current?.focus()
+      setFocusAll(false)
+    }
+  }, [focusAll, bulk])
   // Sempre a lista mais recente, para que respostas tardias não apliquem sobre uma lista velha.
   const latest = useRef(players)
   latest.current = players
@@ -187,11 +201,11 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     }
   }
 
-  async function setAll(paid: boolean) {
+  async function setAll(paid: boolean, confirmed = false) {
     if (bulkBusy.current || inFlight.current.size > 0) return
     bulkBusy.current = true
     setBulk(true)
-    setConfirmingClear(false)
+    setConfirmingFor(null)
     setError(null)
     try {
       onGameChange(await api.setAllPaid(paid))
@@ -205,13 +219,15 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     } finally {
       bulkBusy.current = false
       setBulk(false)
+      if (confirmed) setFocusAll(true)
     }
   }
 
   function clearAll() {
-    // Só pede confirmação quando o sorteio guardado tem alguém alocado.
-    const hasDraw = !!game?.draw && game.draw.teams.some((t) => t.length > 0)
-    if (hasDraw) setConfirmingClear(true)
+    // Só pede confirmação quando o sorteio guardado tem alguém alocado (time ou reserva).
+    const d = game?.draw
+    const hasDraw = !!d && (d.teams.some((t) => t.length > 0) || d.reserves.length > 0)
+    if (hasDraw && game) setConfirmingFor(game.id)
     else void setAll(false)
   }
 
@@ -290,6 +306,7 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
               type="button"
               className="btn btn-ghost text-[12px] px-2 py-1"
               disabled={!game || bulk || pending.size > 0}
+              ref={allBtn}
               aria-busy={bulk || undefined}
               title={game ? undefined : 'Cadastre a data do jogo primeiro'}
               onClick={() => void setAll(true)}
@@ -311,21 +328,40 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
         </div>
 
         {confirmingClear && (
-          <div role="group" aria-label="Confirmar limpeza" className="flex items-center justify-between gap-2 px-3 py-2 rounded-sm bg-gold-tint text-gold-ink text-[13px] shadow-[inset_0_0_0_1px_var(--gold-soft)]">
-            <span>O sorteio será apagado.</span>
-            <div className="flex gap-0.5">
+          <div
+            role="group"
+            aria-label="Confirmar limpeza"
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setConfirmingFor(null)
+                clearBtn.current?.focus()
+              }
+            }}
+          >
+            <div className="flex flex-col gap-[3px]">
+              <span className="text-[15px] font-medium">Limpar pagamentos?</span>
+              <span className="text-[13px] text-neutral-400">O sorteio será apagado.</span>
+            </div>
+            <div className="flex gap-[6px]">
               <button
+                ref={cancelBtn}
                 type="button"
-                className="btn btn-ghost text-[12px] px-2 py-1"
+                className="btn btn-ghost"
                 onClick={() => {
-                  setConfirmingClear(false)
+                  setConfirmingFor(null)
                   clearBtn.current?.focus()
                 }}
               >
                 Cancelar
               </button>
-              <button type="button" className="btn btn-ghost text-[12px] px-2 py-1" onClick={() => void setAll(false)}>
-                Limpar
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={bulk || pending.size > 0}
+                onClick={() => void setAll(false, true)}
+              >
+                Limpar tudo
               </button>
             </div>
           </div>
