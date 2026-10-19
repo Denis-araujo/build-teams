@@ -2,10 +2,13 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import { drawTeams } from '../../shared/draw'
 import type { DrawState, Game, Player } from '../../shared/types'
-import { averageSize, balanceTag, fmt, outsideCount, sizesEqual, spreadOf } from '../lib/drawStats'
+import { outsideCount } from '../lib/drawStats'
 import { canMoveToTeam, moveToReserves, moveToTeam, sanitizeLocks, swapPlayers, teamLetter, toggleLock } from '../lib/drawEdit'
+import { BalanceCard } from './BalanceCard'
 import { CopyBar } from './CopyBar'
 import { DrawModal } from './DrawModal'
+import { Icon } from './icons'
+import { Onboarding } from './Onboarding'
 import { ReservesBar } from './ReservesBar'
 import { TeamCards } from './TeamCards'
 
@@ -209,13 +212,9 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
     )
   }
 
-  const hasTeams = !!draw
+  // Sorteio sem nenhum jogador alocado (listas vazias ou ids que saíram) é o estado vazio.
+  const hasTeams = !!draw && draw.teams.some((t) => t.some((id) => playersById.has(id)))
   const hasPlaced = !!draw && [...draw.teams.flat(), ...draw.reserves].some((id) => playersById.has(id))
-  const sameSizes = draw ? sizesEqual(draw.teams, ratings) : true
-  const spread = draw ? spreadOf(draw.teams, ratings) : 0
-  const tag = draw
-    ? balanceTag(spread, { allowHalf: true, sizesEqual: sameSizes, avgSize: averageSize(draw.teams, ratings) })
-    : null
   const outside = draw && game ? outsideCount(game.paid, players, draw) : 0
   const cannotDraw = busy || paidPlayers.length < config.teamCount
 
@@ -229,50 +228,35 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="m-0 text-[32px] font-medium tracking-[-0.02em]">Times</h1>
-          <span className="rounded-full bg-surface px-[10px] py-1 text-[13px] text-neutral-400 shadow-sm tabular-nums">
-            {config.teamCount} times · {config.teamSize} por time
-          </span>
+          {hasTeams && (
+            <span className="rounded-full bg-surface px-[10px] py-1 text-[13px] text-neutral-400 shadow-sm tabular-nums">
+              {config.teamCount} times × {config.teamSize}
+            </span>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {draw && (
+        {hasTeams && (
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-ghost gap-[6px]"
+              disabled={!game || busy}
+              aria-busy={busy}
+              onClick={() => setModalOpen(true)}
+            >
+              <Icon name="sliders" size={15} />
+              Formato
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary gap-[6px]"
               disabled={cannotDraw}
               aria-busy={busy}
               onClick={() => void runDraw(config)}
             >
-              Sortear de novo{lockedCount ? ` (${lockedCount} ${lockedCount === 1 ? 'travado' : 'travados'})` : ''}
+              <Icon name="shuffle" size={15} />
+              Sortear de novo{lockedCount ? ` · ${lockedCount} ${lockedCount === 1 ? 'travado' : 'travados'}` : ''}
             </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!game || busy}
-            aria-busy={busy}
-            onClick={() => setModalOpen(true)}
-          >
-            Montar times
-          </button>
-        </div>
-      </div>
-      {!game && <span className="-mt-3 text-xs text-neutral-500">Cadastre a data do jogo primeiro</span>}
-      <div className="flex flex-wrap items-center gap-2 text-[13px] text-neutral-400">
-        {draw && tag ? (
-          <>
-            <span>
-              Diferença entre o mais forte e o mais fraco: {fmt(spread)} ★{sameSizes ? '' : ' (média por jogador)'}
-            </span>
-            <span
-              className={`rounded-full px-[9px] py-[3px] text-xs font-medium ${
-                tag.tone === 'good' ? 'bg-gold-tint text-gold-ink shadow-[inset_0_0_0_1px_var(--gold-soft)]' : 'bg-bg text-text'
-              }`}
-            >
-              {tag.label}
-            </span>
-          </>
-        ) : (
-          <span>Os times aparecem aqui depois do sorteio</span>
+          </div>
         )}
       </div>
 
@@ -285,15 +269,17 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
         </p>
       )}
 
-      {!draw ? (
-        <div className="flex flex-col gap-[6px] rounded-lg bg-surface p-7 shadow-sm">
-          <span className="text-xl font-medium tracking-[-0.01em]">Nenhum time montado ainda</span>
-          <span className="max-w-[520px] text-sm text-neutral-400 text-pretty">
-            Marque quem pagou, clique em Montar times e escolha quantos times e quantos jogadores por time. As estrelas são distribuídas para os times ficarem o mais parelhos possível. Quem passar das vagas vira reserva.
-          </span>
-        </div>
+      {!hasTeams || !draw ? (
+        <Onboarding
+          marked={paidPlayers.length}
+          total={players.length}
+          hasGame={!!game}
+          busy={busy}
+          onOpen={() => setModalOpen(true)}
+        />
       ) : (
         <>
+          <BalanceCard teams={draw.teams} ratingById={ratings} />
           <TeamCards
             teams={draw.teams}
             playersById={playersById}

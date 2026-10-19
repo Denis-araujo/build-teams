@@ -1,5 +1,7 @@
 import { formatDayLabel } from '../format'
+import { BalanceCard } from '../components/BalanceCard'
 import { GameCard } from '../components/GameCard'
+import { Icon } from '../components/icons'
 import { SiteHeader } from '../components/SiteHeader'
 import { RatingPill } from '../components/TeamCards'
 import { StarRating } from '../components/StarRating'
@@ -85,7 +87,13 @@ function TeamCards({ game }: { game: PublicGame }) {
 
 export default function MemberPage() {
   const { game, loading, error } = usePublicGame()
-  const hasTeams = !!game && game.teams.length > 0
+  // Sorteio sem nenhum jogador conhecido alocado é o estado "ainda não sorteado".
+  const hasTeams = !!game && game.teams.some((t) => t.some((id) => game.players.some((p) => p.id === id)))
+  const noRoster = !!game && game.players.length === 0
+  // As notas só chegam na resposta pública quando o organizador libera as estrelas.
+  const ratingById = new Map(
+    (game?.players ?? []).flatMap((p) => (typeof p.rating === 'number' ? [[p.id, p.rating] as const] : [])),
+  )
   const byId = new Map((game?.players ?? []).map((p) => [p.id, p]))
   const reserves = (game?.reserves ?? []).flatMap((id) => {
     const p = byId.get(id)
@@ -99,6 +107,36 @@ export default function MemberPage() {
         subtitle={game ? formatDayLabel(game.date, game.time) : error || loading ? undefined : 'Sem jogo marcado'}
       />
 
+      {noRoster && game ? (
+        <main className="box-border flex min-h-[calc(100vh-66px)] items-center justify-center px-5 py-12">
+          <div className="flex w-full max-w-[520px] flex-col items-center gap-6 text-center">
+            <div className="aspect-[4/3] w-full max-w-[360px]">
+              <img
+                src="/images/membro-elenco-vazio.webp"
+                alt="Ilustração de uma jogadora de vôlei triste ao lado de uma bola, com a quadra vazia"
+                width={720}
+                height={540}
+                loading="eager"
+                className="block size-full rounded-[16px] object-cover"
+              />
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <h1 className="m-0 text-[26px] font-medium tracking-[-0.01em] text-balance">
+                A lista de jogadores ainda está vazia
+              </h1>
+              <p className="m-0 max-w-[420px] text-[15px] text-neutral-400 text-pretty">
+                O organizador ainda não cadastrou ninguém. Quando o elenco estiver pronto e os times forem sorteados, a escalação aparece aqui.
+              </p>
+            </div>
+            <span className="flex items-center gap-2 rounded-full bg-surface px-[14px] py-2 text-[14px] shadow-sm">
+              <span className="text-gold-ink">
+                <Icon name="calendar" size={16} />
+              </span>
+              {`Próximo jogo: ${formatDayLabel(game.date, game.time)}`}
+            </span>
+          </div>
+        </main>
+      ) : (
       <main className="flex flex-wrap gap-[28px] px-[28px] pt-[24px] pb-[56px] items-start max-w-[1440px] mx-auto box-border">
         {!game && <h1 className="sr-only">Times</h1>}
         {!game ? (
@@ -121,6 +159,7 @@ export default function MemberPage() {
             <div className="flex min-w-0 flex-[3_1_520px] flex-col gap-5">
               <GameCard game={game} />
               <h1 className="m-0 text-[32px] font-medium tracking-[-0.02em]">Times</h1>
+              {hasTeams && game.showStars && <BalanceCard teams={game.teams} ratingById={ratingById} />}
               {!hasTeams && (
                 <div className="flex flex-col items-start gap-[14px] rounded-lg bg-surface px-[28px] py-[40px] shadow-sm">
                   <div
@@ -157,6 +196,7 @@ export default function MemberPage() {
           </>
         )}
       </main>
+      )}
     </div>
   )
 }

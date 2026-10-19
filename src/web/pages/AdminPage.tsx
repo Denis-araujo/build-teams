@@ -39,6 +39,8 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
         onLogout={() => void logout()}
       />
       <main className="flex flex-wrap gap-[28px] px-[28px] pt-[24px] pb-[56px] items-start max-w-[1440px] mx-auto box-border">
+        {/* Carregando ou com erro ainda não há coluna "Times": o h1 único da tela fica só para leitores de tela. */}
+        {(data.status === 'loading' || data.status === 'error') && <h1 className="sr-only">Times</h1>}
         {data.status === 'error' && (
           <p className="px-3 py-2 rounded-sm bg-gold-tint text-gold-ink shadow-[inset_0_0_0_1px_var(--gold-soft)]" role="alert">
             Não foi possível carregar os dados.{' '}

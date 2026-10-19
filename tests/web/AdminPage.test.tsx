@@ -136,10 +136,10 @@ describe('Limpar com sorteio', () => {
       }),
     )
     await screen.findByLabelText('Pagou: Ana')
-    expect(screen.queryByText('Nenhum time montado ainda')).toBeNull()
+    expect(screen.queryByText('Monte os times em três passos')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Limpar' }))
     fireEvent.click(screen.getByRole('button', { name: 'Limpar tudo' }))
-    expect(await screen.findByText('Nenhum time montado ainda')).toBeTruthy()
+    expect(await screen.findByText('Monte os times em três passos')).toBeTruthy()
     expect(screen.getByText('0 de 1 pagaram')).toBeTruthy()
   })
 })
@@ -150,6 +150,50 @@ describe('estrutura', () => {
     await screen.findByText('Nenhum jogo marcado')
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Times'])
     expect(screen.getByRole('heading', { level: 2, name: 'Jogadores' })).toBeTruthy()
+  })
+})
+
+describe('h1 único em todos os estados do administrador', () => {
+  const h1s = () => screen.queryAllByRole('heading', { level: 1 }).map((h) => h.textContent)
+
+  it('verificando a sessão: nenhum h1 ainda', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <App />
+      </MemoryRouter>,
+    )
+    expect(h1s()).toEqual([])
+  })
+
+  it('carregando os dados: um h1 "Times" só para leitores de tela', async () => {
+    const never = () => new Promise<Response>(() => {})
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (path: string) => (path === '/api/admin/me' ? respond(200, { ok: true }) : never())),
+    )
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <App />
+      </MemoryRouter>,
+    )
+    await screen.findByText('Administrador')
+    expect(h1s()).toEqual(['Times'])
+    expect(screen.getByRole('heading', { level: 1 }).className).toContain('sr-only')
+  })
+
+  it('erro ao carregar: um h1 "Times" e o alerta com "Tentar de novo"', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 500, body: { error: 'x' } } }))
+    await screen.findByRole('alert')
+    expect(h1s()).toEqual(['Times'])
+    expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeTruthy()
+  })
+
+  it('depois de carregar continua um só h1 (o da coluna Times)', async () => {
+    setup(authed())
+    await screen.findByText('Nenhum jogo marcado')
+    expect(h1s()).toEqual(['Times'])
+    expect(screen.getByRole('heading', { level: 1 }).className).not.toContain('sr-only')
   })
 })
 

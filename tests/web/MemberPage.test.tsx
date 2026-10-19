@@ -191,6 +191,97 @@ describe('MemberPage', () => {
     expect(card.querySelector('[aria-label="3,5 estrelas"]')).not.toBeNull()
   })
 
+  describe('sem jogo x sem elenco', () => {
+    const IMG_ALT = 'Ilustração de uma jogadora de vôlei triste ao lado de uma bola, com a quadra vazia'
+
+    it('sem jogo: cartão "Nenhum jogo marcado" e nenhuma ilustração', async () => {
+      setup(null)
+      expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()
+      expect(screen.queryByRole('img', { name: IMG_ALT })).toBeNull()
+      expect(document.querySelector('img')).toBeNull()
+    })
+
+    it('jogo sem nenhum jogador: tela "sem elenco" com a ilustração, o título e a pílula do jogo', async () => {
+      setup(game({ players: [] }))
+      const img = (await screen.findByRole('img', { name: IMG_ALT })) as HTMLImageElement
+      expect(img.getAttribute('src')).toBe('/images/membro-elenco-vazio.webp')
+      expect(img.getAttribute('width')).toBe('720')
+      expect(img.getAttribute('height')).toBe('540')
+      expect(img.getAttribute('loading')).toBe('eager')
+      expect(img.className).toContain('object-cover')
+      expect(img.parentElement!.className).toContain('max-w-[360px]')
+      expect(img.parentElement!.className).toContain('aspect-[4/3]')
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('A lista de jogadores ainda está vazia')
+      expect(
+        screen.getByText(
+          'O organizador ainda não cadastrou ninguém. Quando o elenco estiver pronto e os times forem sorteados, a escalação aparece aqui.',
+        ),
+      ).toBeTruthy()
+      expect(screen.getByText('Próximo jogo: Sábado, 17 de outubro · 19:00')).toBeTruthy()
+      // o cabeçalho continua; o cartão do jogo, o aviso de times e o elenco não aparecem
+      expect(screen.getByText('Membro')).toBeTruthy()
+      expect(screen.queryByRole('region', { name: 'Jogo' })).toBeNull()
+      expect(screen.queryByText('Nenhum jogo marcado')).toBeNull()
+      expect(screen.queryByText('Os times ainda não foram sorteados')).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'Elenco' })).toBeNull()
+    })
+
+    it('sem elenco tem um único h1 (o da própria tela)', async () => {
+      setup(game({ players: [] }))
+      await screen.findByRole('img')
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    })
+
+    it('com elenco e sem sorteio: aviso dos times, sem ilustração', async () => {
+      setup(game())
+      expect(await screen.findByText('Os times ainda não foram sorteados')).toBeTruthy()
+      expect(document.querySelector('img')).toBeNull()
+      expect(screen.getByRole('region', { name: 'Jogo' })).toBeTruthy()
+    })
+
+    it('times só com listas vazias ou ids desconhecidos contam como sem sorteio', async () => {
+      setup(game({ teams: [[], ['zzz']], reserves: [] }))
+      expect(await screen.findByText('Os times ainda não foram sorteados')).toBeTruthy()
+      expect(screen.queryByRole('heading', { name: 'Time A' })).toBeNull()
+    })
+  })
+
+  describe('Equilíbrio', () => {
+    const drawn = (over: Partial<PublicGame> = {}) =>
+      game({
+        showStars: true,
+        players: [
+          { id: 'p1', name: 'Rafael', paid: true, rating: 4 },
+          { id: 'p2', name: 'Bruno', paid: true, rating: 3.5 },
+        ],
+        teams: [['p1'], ['p2']],
+        ...over,
+      })
+
+    it('com times e estrelas visíveis mostra o card com tag, diferença e segmentos', async () => {
+      setup(drawn())
+      expect(await screen.findByText('Equilíbrio')).toBeTruthy()
+      expect(screen.getByText('Equilibrado')).toBeTruthy()
+      expect(screen.getByText('Diferença 0,5 ★')).toBeTruthy()
+      expect(Array.from(screen.getByTestId('balance-bar').children).map((c) => c.textContent)).toEqual(['A4 ★', 'B3,5 ★'])
+    })
+
+    it('estrelas escondidas: sem card e sem nenhuma nota na tela', async () => {
+      setup(game({ teams: [['p1'], ['p2']] }))
+      await screen.findByRole('heading', { name: 'Time A' })
+      expect(screen.queryByText('Equilíbrio')).toBeNull()
+      expect(screen.queryByTestId('balance-bar')).toBeNull()
+      expect(document.querySelector(STARS)).toBeNull()
+      expect(document.body.textContent).not.toMatch(/★|Diferença/)
+    })
+
+    it('estrelas visíveis mas sem sorteio: sem card', async () => {
+      setup(drawn({ teams: [] }))
+      await screen.findByText('Os times ainda não foram sorteados')
+      expect(screen.queryByText('Equilíbrio')).toBeNull()
+    })
+  })
+
   describe('atualização automática', () => {
     beforeEach(() => {
       vi.useFakeTimers()

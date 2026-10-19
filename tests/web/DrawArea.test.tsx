@@ -45,16 +45,71 @@ const sent = (f: ReturnType<typeof vi.fn>, i = 0) => JSON.parse((f.mock.calls[i]
 const open = () => fireEvent.click(screen.getByRole('button', { name: 'Montar times' }))
 
 describe('estados iniciais', () => {
-  it('sem sorteio: estado vazio, config padrão 2 times · 6 por time', () => {
+  it('sem sorteio: onboarding de três passos; cabeçalho só com o título (sem chip nem botões)', () => {
     setup(GAME(['a', 'b']), () => respond(500))
-    expect(screen.getByText('Nenhum time montado ainda')).toBeTruthy()
-    expect(screen.getByText('2 times · 6 por time')).toBeTruthy()
+    expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
+    expect(screen.queryByText('Nenhum time montado ainda')).toBeNull()
+    expect(screen.getByText('2 de 6 marcados na lista ao lado.')).toBeTruthy()
+    expect(screen.queryByText(/times ×/)).toBeNull()
     expect(screen.queryByRole('button', { name: /Sortear de novo/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Formato' })).toBeNull()
+    expect(screen.queryByText('Equilíbrio')).toBeNull()
+  })
+  it('config padrão 2 × 6 no formato do modal, sem chip antes do sorteio', () => {
+    setup(GAME(['a', 'b']), () => respond(500))
+    open()
+    expect(screen.getByTestId('teams-value').textContent).toBe('2')
+    expect(screen.getByTestId('size-value').textContent).toBe('6')
+  })
+  it('com sorteio: chip "2 times × 2", Formato e Sortear de novo no cabeçalho, sem Montar times', () => {
+    const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['a', 'b'], ['c']], reserves: [], locks: {} }
+    setup(GAME(['a', 'b', 'c'], draw), () => respond(500))
+    expect(screen.getByText('2 times × 2')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Formato' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Sortear de novo' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Montar times' })).toBeNull()
+    expect(screen.queryByText('Monte os times em três passos')).toBeNull()
+  })
+  it('Formato abre o modal do formato', () => {
+    const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['a', 'b'], ['c']], reserves: [], locks: {} }
+    setup(GAME(['a', 'b', 'c'], draw), () => respond(500))
+    fireEvent.click(screen.getByRole('button', { name: 'Formato' }))
+    expect(screen.getByTestId('teams-value').textContent).toBe('2')
+    expect(screen.getByTestId('size-value').textContent).toBe('2')
+  })
+  it('sorteio com todas as listas vazias é estado vazio: onboarding, sem cards nem equilíbrio', () => {
+    const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [[], []], reserves: [], locks: {} }
+    setup(GAME(['a', 'b'], draw), () => respond(500))
+    expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Time A' })).toBeNull()
+    expect(screen.queryByText('Equilíbrio')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Formato' })).toBeNull()
+  })
+  it('sorteio só com ids desconhecidos também é estado vazio', () => {
+    const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['zz'], []], reserves: [], locks: {} }
+    setup(GAME(['a', 'b'], draw), () => respond(500))
+    expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Time A' })).toBeNull()
+  })
+  it('onboarding: passo 1 concluído e botão habilitado com 2 marcados; desabilitado com 1', () => {
+    setup(GAME(['a']), () => respond(500))
+    expect((screen.getByRole('button', { name: 'Montar times' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('1').className).not.toContain('bg-navy')
+    cleanup()
+    setup(GAME(['a', 'b']), () => respond(500))
+    expect((screen.getByRole('button', { name: 'Montar times' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByText('1').className).toContain('bg-navy')
+  })
+  it('onboarding: o clique em Montar times abre o formato', () => {
+    setup(GAME(['a', 'b']), () => respond(500))
+    open()
+    expect(screen.getByTestId('teams-value')).toBeTruthy()
   })
   it('sem jogo: Montar times desabilitado com dica', () => {
     setup(null, () => respond(500))
     expect((screen.getByRole('button', { name: 'Montar times' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('Cadastre a data do jogo primeiro')).toBeTruthy()
+    expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
   })
 })
 
@@ -95,8 +150,11 @@ describe('sortear', () => {
     expect(screen.getByText('Reservas · 1')).toBeTruthy()
     expect(screen.getByText('Bia')).toBeTruthy()
     // spread: 6 vs 7 → 1 ★ , Quase parelho
-    expect(screen.getByText('Diferença entre o mais forte e o mais fraco: 1 ★')).toBeTruthy()
+    expect(screen.getByText('Equilíbrio')).toBeTruthy()
+    expect(screen.getByText('Diferença 1 ★')).toBeTruthy()
     expect(screen.getByText('Quase parelho')).toBeTruthy()
+    expect(screen.getByText('2 times × 2')).toBeTruthy()
+    expect(Array.from(screen.getByTestId('balance-bar').children).map((c) => c.textContent)).toEqual(['A6 ★', 'B7 ★'])
   })
 
   it('nomes duplicados aparecem separadamente', async () => {
@@ -114,7 +172,7 @@ describe('sortear', () => {
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Sortear' }))
     await screen.findByRole('heading', { name: 'Time A' })
-    expect(screen.getByText('Diferença entre o mais forte e o mais fraco: 2 ★ (média por jogador)')).toBeTruthy()
+    expect(screen.getByText('Diferença 2 ★ na média por jogador')).toBeTruthy()
     expect(screen.getByText('Desequilibrado')).toBeTruthy()
   })
 
@@ -133,7 +191,7 @@ describe('sortear', () => {
     const draw: DrawState = { teamCount: 3, teamSize: 1, teams: [['a'], ['b'], ['c']], reserves: [], locks: { a: 0, e: 1, b: 2 } }
     const { fetchMock } = setup(GAME(['a', 'b', 'c'], draw), () => respond(200, GAME(['a', 'b', 'c'], draw)))
     // e (travado) não pagou; b está na trava 2 → ok
-    const btn = screen.getByRole('button', { name: 'Sortear de novo (2 travados)' })
+    const btn = screen.getByRole('button', { name: 'Sortear de novo · 2 travados' })
     fireEvent.click(btn)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     const body = sent(fetchMock)
@@ -170,7 +228,7 @@ describe('sortear', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(btn.disabled).toBe(true))
     expect(btn.getAttribute('aria-busy')).toBe('true')
-    expect((screen.getByRole('button', { name: 'Montar times' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Formato' }) as HTMLButtonElement).disabled).toBe(true)
     release(respond(200, GAME(['a', 'b'], draw)))
     await waitFor(() => expect(btn.disabled).toBe(false))
   })

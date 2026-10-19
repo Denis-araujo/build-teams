@@ -36,7 +36,7 @@ export function spreadOf(teams: string[][], ratingById: RatingById): number {
   return Math.max(...values) - Math.min(...values)
 }
 
-export type BalanceTag = { label: 'Equilibrado' | 'Quase parelho' | 'Desequilibrado'; tone: 'good' | 'neutral' }
+export type BalanceTag = { label: 'Equilibrado' | 'Quase parelho' | 'Desequilibrado'; tone: 'good' | 'ok' | 'bad' }
 
 export function balanceTag(
   spread: number,
@@ -44,8 +44,13 @@ export function balanceTag(
 ): BalanceTag {
   const tol = (opts.allowHalf ? 0.5 : 1) / (opts.sizesEqual ? 1 : Math.max(1, opts.avgSize))
   if (spread <= tol) return { label: 'Equilibrado', tone: 'good' }
-  if (spread <= tol * 3) return { label: 'Quase parelho', tone: 'neutral' }
-  return { label: 'Desequilibrado', tone: 'neutral' }
+  if (spread <= tol * 3) return { label: 'Quase parelho', tone: 'ok' }
+  return { label: 'Desequilibrado', tone: 'bad' }
+}
+
+/** Peso (flex-grow) do segmento do time na barra de equilíbrio; nunca abaixo de 0,1 para o segmento não sumir. */
+export function barShare(total: number, average: number, sizesEqual: boolean): number {
+  return Math.max(0.1, sizesEqual ? total : average)
 }
 
 /** Pagos (listados em `players`) que não estão em nenhum time nem nas reservas. */

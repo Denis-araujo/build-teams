@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { balanceTag, outsideCount, spreadOf, teamAverage, teamTotals } from '../../src/web/lib/drawStats'
+import { balanceTag, barShare, outsideCount, spreadOf, teamAverage, teamTotals } from '../../src/web/lib/drawStats'
 import { fmt } from '../../src/shared/whatsapp'
 import type { DrawState, Player } from '../../src/shared/types'
 
@@ -36,8 +36,22 @@ describe('balanceTag', () => {
   it('limites exatos com tolerância 0,5', () => {
     expect(balanceTag(0.5, eq)).toEqual({ label: 'Equilibrado', tone: 'good' })
     expect(balanceTag(0.51, eq).label).toBe('Quase parelho')
-    expect(balanceTag(1.5, eq)).toEqual({ label: 'Quase parelho', tone: 'neutral' })
-    expect(balanceTag(1.51, eq)).toEqual({ label: 'Desequilibrado', tone: 'neutral' })
+    expect(balanceTag(1.5, eq)).toEqual({ label: 'Quase parelho', tone: 'ok' })
+    expect(balanceTag(1.51, eq)).toEqual({ label: 'Desequilibrado', tone: 'bad' })
+  })
+  it('os 3 tons: good até tol, ok até 3·tol, bad acima (tol 1 sem meia estrela)', () => {
+    const whole = { allowHalf: false, sizesEqual: true, avgSize: 6 }
+    expect(balanceTag(0, whole).tone).toBe('good')
+    expect(balanceTag(1, whole).tone).toBe('good')
+    expect(balanceTag(1.01, whole).tone).toBe('ok')
+    expect(balanceTag(3, whole).tone).toBe('ok')
+    expect(balanceTag(3.01, whole).tone).toBe('bad')
+  })
+  it('tamanhos diferentes: o tom também escala pela tolerância', () => {
+    const uneq = { allowHalf: true, sizesEqual: false, avgSize: 4 }
+    expect(balanceTag(0.125, uneq).tone).toBe('good')
+    expect(balanceTag(0.375, uneq).tone).toBe('ok')
+    expect(balanceTag(0.4, uneq).tone).toBe('bad')
   })
   it('tamanhos diferentes dividem a tolerância pelo tamanho médio', () => {
     const uneq = { allowHalf: true, sizesEqual: false, avgSize: 4 }
@@ -51,6 +65,25 @@ describe('balanceTag', () => {
   })
   it('avgSize menor que 1 não amplia a tolerância', () => {
     expect(balanceTag(0.5, { allowHalf: true, sizesEqual: false, avgSize: 0.2 }).label).toBe('Equilibrado')
+  })
+})
+
+describe('barShare', () => {
+  it('tamanhos iguais: usa o total', () => {
+    expect(barShare(7.5, 3.75, true)).toBe(7.5)
+  })
+  it('tamanhos diferentes: usa a média', () => {
+    expect(barShare(7.5, 3.75, false)).toBe(3.75)
+  })
+  it('zero ou quase zero sobe para 0,1 (o segmento nunca some)', () => {
+    expect(barShare(0, 0, true)).toBe(0.1)
+    expect(barShare(0.05, 0.05, false)).toBe(0.1)
+    expect(barShare(0, 4, true)).toBe(0.1)
+  })
+  it('passos de 0,5 passam intactos', () => {
+    expect(barShare(0.5, 0.5, true)).toBe(0.5)
+    expect(barShare(12, 2, true)).toBe(12)
+    expect(barShare(1, 0.5, false)).toBe(0.5)
   })
 })
 
