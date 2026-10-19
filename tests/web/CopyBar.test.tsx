@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { buildWhatsAppText } from '../../src/shared/whatsapp'
 import { CopyBar } from '../../src/web/components/CopyBar'
 import type { Player } from '../../src/shared/types'
 
@@ -13,6 +14,8 @@ afterEach(() => {
 const P = (id: string, name: string, rating: number): Player => ({ id, name, rating, archived: false })
 const teams = [[P('a', 'Ana', 4.5), P('b', 'Bia', 3)], [P('c', 'Cris', 2)]]
 const reserves = [P('d', 'Duda', 5)]
+const WITH =
+  '🏐 *Escalação · Vôlei*\nSábado, 24/10 · 3 jogadores\n\n*Time A*\n1. Ana ★4,5\n2. Bia ★3\n\n*Time B*\n1. Cris ★2\n\nReservas: Duda'
 const WITHOUT = '🏐 *Escalação · Vôlei*\nSábado, 24/10 · 3 jogadores\n\n*Time A*\n1. Ana\n2. Bia\n\n*Time B*\n1. Cris\n\nReservas: Duda'
 
 function mount() {
@@ -43,7 +46,8 @@ describe('CopyBar', () => {
     fireEvent.click(screen.getByLabelText('Incluir estrelas'))
     fireEvent.click(copyBtn())
     await screen.findByRole('button', { name: 'Copiado ✓' })
-    expect((writeText.mock.calls[0] as unknown[])[0]).toContain('1. Ana ★4,5')
+    expect((writeText.mock.calls[0] as unknown[])[0]).toBe(WITH)
+    expect(WITH).toBe(buildWhatsAppText({ date: '2026-10-24', teams, reserves, includeStars: true }))
   })
 
   it('Copiado ✓ some depois de 2 s', async () => {
@@ -82,5 +86,50 @@ describe('CopyBar', () => {
     const ta = await findArea()
     expect(ta.readOnly).toBe(true)
     expect(ta.value).toBe(WITHOUT)
+  })
+
+  it('trocar os times atualiza o texto do fallback', async () => {
+    vi.stubGlobal('navigator', {})
+    const view = render(<CopyBar date="2026-10-24" teams={teams} reserves={reserves} />)
+    fireEvent.click(copyBtn())
+    expect((await findArea()).value).toBe(WITHOUT)
+    view.rerender(<CopyBar date="2026-10-24" teams={[[teams[0][0]]]} reserves={[]} />)
+    expect((await findArea()).value).toBe('🏐 *Escalação · Vôlei*\nSábado, 24/10 · 1 jogador\n\n*Time A*\n1. Ana')
+  })
+
+  it('focar a textarea seleciona tudo', async () => {
+    vi.stubGlobal('navigator', {})
+    mount()
+    fireEvent.click(copyBtn())
+    const ta = await findArea()
+    fireEvent.focus(ta)
+    expect(ta.selectionStart).toBe(0)
+    expect(ta.selectionEnd).toBe(WITHOUT.length)
+  })
+
+  it('desmontar limpa o timer e ignora a promessa que resolve depois', async () => {
+    vi.useFakeTimers()
+    let resolve!: () => void
+    vi.stubGlobal('navigator', { clipboard: { writeText: () => new Promise<void>((r) => (resolve = r)) } })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const view = render(<CopyBar date="2026-10-24" teams={teams} reserves={reserves} />)
+    fireEvent.click(copyBtn())
+    view.unmount()
+    await act(async () => resolve())
+    expect(vi.getTimerCount()).toBe(0)
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('desmontar com Copiado ✓ visível não deixa timer', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(async () => {}) } })
+    const view = render(<CopyBar date="2026-10-24" teams={teams} reserves={reserves} />)
+    await act(async () => {
+      fireEvent.click(copyBtn())
+    })
+    expect(vi.getTimerCount()).toBe(1)
+    view.unmount()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

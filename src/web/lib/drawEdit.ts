@@ -22,7 +22,7 @@ function withoutPlayer(draw: DrawState, id: string): DrawState {
 }
 
 export function moveToTeam(draw: DrawState, playerId: string, teamIndex: number): DrawState {
-  if (teamIndex < 0 || teamIndex >= draw.teams.length) return draw
+  if (teamIndex < 0 || teamIndex >= draw.teams.length || locate(draw, playerId) === null) return draw
   const locked = draw.locks[playerId] !== undefined
   const next = withoutPlayer(draw, playerId)
   next.teams[teamIndex] = [...next.teams[teamIndex], playerId]
@@ -31,6 +31,7 @@ export function moveToTeam(draw: DrawState, playerId: string, teamIndex: number)
 }
 
 export function moveToReserves(draw: DrawState, playerId: string): DrawState {
+  if (locate(draw, playerId) === null) return draw
   const next = withoutPlayer(draw, playerId)
   next.reserves = [...next.reserves, playerId]
   return next
@@ -71,6 +72,7 @@ export function canMoveToTeam(
   playerId: string,
   teamIndex: number,
 ): { ok: true } | { ok: false; reason: string } {
+  if (locate(draw, playerId) === null) return { ok: false, reason: 'Jogador não está mais no sorteio.' }
   if (draw.teams[teamIndex]?.includes(playerId)) return { ok: true }
   if ((draw.teams[teamIndex]?.length ?? 0) >= draw.teamSize) {
     return {

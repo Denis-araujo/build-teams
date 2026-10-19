@@ -25,13 +25,21 @@ const GAME = (draw: DrawState | null): Game => ({ id: 'g', date: '2026-10-24', p
 const respond = (status: number, body?: unknown) =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
 
+/** Espiona drops que chegam acima do card: a linha deve parar a propagação. */
+const parentDrop = vi.fn()
+
 function setup(initial: Game, handler: (init: RequestInit) => Promise<Response> | Response) {
   const fetchMock = vi.fn(async (_p: string, init: RequestInit = {}) => handler(init))
   vi.stubGlobal('fetch', fetchMock)
   const onUnauthorized = vi.fn()
+  parentDrop.mockClear()
   function Host() {
     const [game, setGame] = useState<Game>(initial)
-    return <DrawArea game={game} players={PLAYERS} onGameChange={(g) => g && setGame(g)} onUnauthorized={onUnauthorized} />
+    return (
+      <div onDrop={parentDrop}>
+        <DrawArea game={game} players={PLAYERS} onGameChange={(g) => g && setGame(g)} onUnauthorized={onUnauthorized} />
+      </div>
+    )
   }
   render(<Host />)
   return { fetchMock, onUnauthorized }
@@ -87,15 +95,20 @@ describe('arrastar e soltar', () => {
     const { fetchMock } = setup(GAME(DRAW()), echo)
     const data = drag('Ana')
     fireEvent.drop(row('Cris'), { dataTransfer: data })
+    // a linha trata o drop e não deixa chegar ao card nem acima
+    expect(parentDrop).not.toHaveBeenCalled()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(sent(fetchMock).teams).toEqual([['c', 'b'], ['a']])
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('soltar sobre um jogador troca mesmo com o time cheio e só dispara uma vez', async () => {
     const { fetchMock } = setup(GAME(DRAW({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'] })), echo)
     fireEvent.drop(row('Cris'), { dataTransfer: drag('Ana') })
+    expect(parentDrop).not.toHaveBeenCalled()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(sent(fetchMock).teams).toEqual([['c', 'b'], ['a', 'd']])
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('soltar nas reservas manda o jogador para lá', async () => {
@@ -150,12 +163,13 @@ describe('arrastar e soltar', () => {
     let release!: (r: Response) => void
     const { fetchMock } = setup(GAME(DRAW()), () => new Promise<Response>((r) => (release = r)))
     fireEvent.drop(card('B'), { dataTransfer: drag('Ana') })
-    expect(card('A').closest('section')).toBeTruthy()
     await waitFor(() => expect(document.querySelector('[aria-busy="true"]')).toBeTruthy())
     fireEvent.drop(reserves(), { dataTransfer: drag('Bia') })
     fireEvent.click(screen.getByRole('button', { name: 'Travar Bia neste time' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mover Bia para' }), { target: { value: 'reserves' } })
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect((screen.getByRole('combobox', { name: 'Mover Bia para' }) as HTMLSelectElement).disabled).toBe(true)
+    expect(screen.getByRole('combobox', { name: 'Mover Bia para' }).getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Travar Bia neste time' }).getAttribute('aria-disabled')).toBe('true')
     release(respond(200, GAME(DRAW({ teams: [['b'], ['c', 'a']] }))))
     await waitFor(() => expect(document.querySelector('[aria-busy="true"]')).toBeNull())
   })
@@ -244,8 +258,9 @@ describe('Sortear de novo', () => {
     fireEvent.click(screen.getByRole('button', { name: /Sortear de novo/ }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     const body = sent(fetchMock)
-    for (const [id, idx] of Object.entries(body.locks)) expect(body.teams[idx]).toContain(id)
-    expect(Object.keys(body.locks).length).toBeLessThan(3)
+    // c não coube no time A (cheio com a e b): sua trava não é enviada
+    expect(body.locks).toEqual({ a: 0, b: 0 })
+    expect(body.teams[0].sort()).toEqual(['a', 'b'])
   })
 })
 
@@ -255,6 +270,68 @@ describe('Copiar escalação', () => {
     expect(screen.getByRole('button', { name: 'Copiar escalação' })).toBeTruthy()
     cleanup()
     setup(GAME(null), echo)
+    expect(screen.queryByRole('button', { name: 'Copiar escalação' })).toBeNull()
+  })
+})
+
+describe('foco depois de salvar', () => {
+  it('o select continua focado (já no novo time) e o botão de cadeado também', async () => {
+    setup(GAME(DRAW()), echo)
+    const sel = screen.getByRole('combobox', { name: 'Mover Ana para' })
+    sel.focus()
+    fireEvent.change(sel, { target: { value: '1' } })
+    await waitFor(() => expect(within(card('B')).getByText('Ana')).toBeTruthy())
+    const moved = screen.getByRole('combobox', { name: 'Mover Ana para' })
+    expect(within(card('B')).getByRole('combobox', { name: 'Mover Ana para' })).toBe(moved)
+    expect(document.activeElement).toBe(moved)
+
+    const lock = screen.getByRole('button', { name: 'Travar Bia neste time' })
+    lock.focus()
+    fireEvent.click(lock)
+    const after = await screen.findByRole('button', { name: 'Destravar Bia' })
+    expect(document.activeElement).toBe(after)
+  })
+
+  it('reserva movida para um time mantém o foco no select', async () => {
+    setup(GAME(DRAW()), echo)
+    const sel = screen.getByRole('combobox', { name: 'Mover Duda para' })
+    sel.focus()
+    fireEvent.change(sel, { target: { value: '1' } })
+    await waitFor(() => expect(within(card('B')).getByText('Duda')).toBeTruthy())
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Mover Duda para' }))
+  })
+
+  it('salvamento que falha deixa o foco onde estava', async () => {
+    setup(GAME(DRAW()), () => respond(400, { error: 'ruim' }))
+    const sel = screen.getByRole('combobox', { name: 'Mover Ana para' })
+    sel.focus()
+    fireEvent.change(sel, { target: { value: '1' } })
+    await screen.findByRole('alert')
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Mover Ana para' }))
+  })
+})
+
+describe('ids que saíram do sorteio', () => {
+  it('arrasta, o jogador sai do sorteio por fora e o drop não faz requisição nem quebra', () => {
+    const fetchMock = vi.fn(async () => respond(200, {}))
+    vi.stubGlobal('fetch', fetchMock)
+    const withAna = GAME(DRAW())
+    const withoutAna = GAME(DRAW({ teams: [['b'], ['c']] }))
+    const view = render(<DrawArea game={withAna} players={PLAYERS} onGameChange={() => {}} onUnauthorized={() => {}} />)
+    const data = drag('Ana')
+    view.rerender(<DrawArea game={withoutAna} players={PLAYERS} onGameChange={() => {}} onUnauthorized={() => {}} />)
+    expect(screen.queryByText('Ana')).toBeNull()
+    fireEvent.drop(card('B'), { dataTransfer: { ...data, getData: () => 'a' } })
+    fireEvent.drop(reserves(), { dataTransfer: { ...data, getData: () => 'a' } })
+    fireEvent.drop(row('Cris'), { dataTransfer: { ...data, getData: () => 'a' } })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.queryByText('Solte aqui para mandar às reservas')).toBeNull()
+  })
+})
+
+describe('Copiar escalação sem ninguém colocado', () => {
+  it('não aparece quando nenhum id do sorteio existe na lista de jogadores', () => {
+    setup(GAME(DRAW({ teams: [['x'], ['y']], reserves: ['z'] })), echo)
     expect(screen.queryByRole('button', { name: 'Copiar escalação' })).toBeNull()
   })
 })

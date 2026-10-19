@@ -7,11 +7,16 @@ type Props = { date: string; teams: Player[][]; reserves: Player[] }
 export function CopyBar({ date, teams, reserves }: Props) {
   const [includeStars, setIncludeStars] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [fallback, setFallback] = useState<string | null>(null)
+  const [showFallback, setShowFallback] = useState(false)
+  const mounted = useRef(true)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      if (timer.current) clearTimeout(timer.current)
+    }
   }, [])
 
   const text = () => buildWhatsAppText({ date, teams, reserves, includeStars })
@@ -21,13 +26,15 @@ export function CopyBar({ date, teams, reserves }: Props) {
     try {
       if (!navigator.clipboard) throw new Error('sem área de transferência')
       await navigator.clipboard.writeText(value)
-      setFallback(null)
+      if (!mounted.current) return
+      setShowFallback(false)
       setCopied(true)
       if (timer.current) clearTimeout(timer.current)
       timer.current = setTimeout(() => setCopied(false), 2000)
     } catch {
+      if (!mounted.current) return
       setCopied(false)
-      setFallback(value)
+      setShowFallback(true)
     }
   }
 
@@ -43,19 +50,18 @@ export function CopyBar({ date, teams, reserves }: Props) {
             checked={includeStars}
             onChange={(e) => {
               setIncludeStars(e.target.checked)
-              setFallback(null)
             }}
           />
           Incluir estrelas
         </label>
       </div>
-      {fallback !== null && (
+      {showFallback && (
         <>
           <textarea
             readOnly
             className="copy-fallback"
-            rows={Math.min(14, fallback.split('\n').length + 1)}
-            value={fallback}
+            rows={Math.min(14, text().split('\n').length + 1)}
+            value={text()}
             onFocus={(e) => e.currentTarget.select()}
           />
           <span style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>Copie o texto acima manualmente</span>

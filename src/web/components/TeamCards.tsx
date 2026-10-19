@@ -50,11 +50,12 @@ export function TeamCards({ teams, playersById, renderRowExtras, rowProps, cardP
             <ul className="plain-list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {members.map((p) => {
                 const ctx = { player: p, teamIndex: i }
+                const rp = rowProps?.(ctx)
                 return (
                   <li
                     key={p.id}
-                    {...rowProps?.(ctx)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, ...rowProps?.(ctx).style }}
+                    {...rp}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 14, ...rp?.style }}
                   >
                     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                     <StarRating value={p.rating} size={12} />

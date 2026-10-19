@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import { drawTeams } from '../../shared/draw'
 import type { DrawState, Game, Player } from '../../shared/types'
@@ -31,6 +31,8 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
   const [dragId, setDragId] = useState<string | null>(null)
   const [over, setOver] = useState<number | 'reserves' | null>(null)
   const inFlight = useRef(false)
+  const rootRef = useRef<HTMLElement>(null)
+  const pendingFocus = useRef<{ id: string; control: 'lock' | 'move' } | null>(null)
 
   const draw = game?.draw ?? null
   const playersById = new Map(players.map((p) => [p.id, p]))
@@ -44,14 +46,19 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
   const lockedCount = Object.keys(survivingLocks).length
 
   /** Toda mudança passa por aqui: sanear travas, salvar e só então mostrar o que o servidor devolveu. */
-  async function persist(build: () => DrawState) {
+  async function persist(build: () => DrawState, focus?: { id: string; control: 'lock' | 'move' }) {
     if (!game || inFlight.current) return
     inFlight.current = true
     setBusy(true)
     setError(null)
     try {
-      onGameChange(await api.saveDraw(sanitizeLocks(build())))
+      const next = build()
+      // Transformação que não mudou nada (id que saiu do sorteio, reserva travada...): nada a salvar.
+      if (draw && next === draw) return
+      pendingFocus.current = focus ?? null
+      onGameChange(await api.saveDraw(sanitizeLocks(next)))
     } catch (e) {
+      pendingFocus.current = null
       if (e instanceof UnauthorizedError) onUnauthorized()
       else setError(e instanceof HttpError && e.serverMessage ? e.serverMessage : 'Não foi possível salvar o sorteio. Tente de novo.')
     } finally {
@@ -74,13 +81,30 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
     })
   }
 
+  // O sorteio mudou por fora (pagamento, resposta do servidor): arrasto em andamento deixa de valer.
+  useEffect(() => {
+    setDragId(null)
+    setOver(null)
+  }, [game])
+
+  // Depois de salvar, devolve o foco ao controle que originou a edição (o nó pode ter mudado de time).
+  useEffect(() => {
+    const target = pendingFocus.current
+    if (!target) return
+    pendingFocus.current = null
+    const el = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('[data-control]') ?? []).find(
+      (n) => n.dataset.playerId === target.id && n.dataset.control === target.control,
+    )
+    el?.focus()
+  }, [game])
+
   const locationOf = (id: string) => draw?.teams.findIndex((t) => t.includes(id)) ?? -1
 
-  function moveTo(id: string, target: number | 'reserves') {
+  function moveTo(id: string, target: number | 'reserves', focus?: { id: string; control: 'lock' | 'move' }) {
     if (!draw || inFlight.current) return
     if (target === 'reserves') {
       if (draw.reserves.includes(id)) return
-      void persist(() => moveToReserves(draw, id))
+      void persist(() => moveToReserves(draw, id), focus)
       return
     }
     if (locationOf(id) === target) return
@@ -89,7 +113,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
       setError(check.reason)
       return
     }
-    void persist(() => moveToTeam(draw, id, target))
+    void persist(() => moveToTeam(draw, id, target), focus)
   }
 
   function swap(a: string, b: string) {
@@ -116,7 +140,9 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
       if (over !== target) setOver(target)
     },
     onDragLeave: (e: DragEvent) => {
-      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver((o) => (o === target ? null : o))
+      // relatedTarget nulo: mantém o destaque até soltar ou o dragend, para não piscar.
+      const next = e.relatedTarget as Node | null
+      if (next && !e.currentTarget.contains(next)) setOver((o) => (o === target ? null : o))
     },
     onDrop: (e: DragEvent) => {
       e.preventDefault()
@@ -151,9 +177,13 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
       <select
         className="move-select"
         aria-label={`Mover ${p.name} para`}
-        disabled={busy}
+        aria-disabled={busy}
+        data-player-id={p.id}
+        data-control="move"
         value={current}
-        onChange={(e) => moveTo(p.id, e.target.value === 'reserves' ? 'reserves' : Number(e.target.value))}
+        onChange={(e) =>
+          moveTo(p.id, e.target.value === 'reserves' ? 'reserves' : Number(e.target.value), { id: p.id, control: 'move' })
+        }
       >
         {draw!.teams.map((t, i) => {
           const full = i !== teamIndex && t.length >= draw!.teamSize
@@ -180,7 +210,7 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
   const cannotDraw = busy || paidPlayers.length < config.teamCount
 
   return (
-    <section className="draw-area" aria-label="Times" aria-busy={busy}>
+    <section ref={rootRef} className="draw-area" aria-label="Times" aria-busy={busy}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16, justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.01em' }}>Times</h1>
@@ -257,9 +287,11 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized }: Props)
                     className="icon-btn"
                     aria-pressed={locked}
                     aria-label={locked ? `Destravar ${player.name}` : `Travar ${player.name} neste time`}
-                    disabled={busy}
+                    aria-disabled={busy}
+                    data-player-id={player.id}
+                    data-control="lock"
                     style={{ color: locked ? 'var(--gold-ink)' : 'var(--color-neutral-500)' }}
-                    onClick={() => void persist(() => toggleLock(draw, player.id))}
+                    onClick={() => void persist(() => toggleLock(draw, player.id), { id: player.id, control: 'lock' })}
                   >
                     <svg viewBox="0 0 256 256" width="14" height="14" aria-hidden="true">
                       <path fill="currentColor" d={locked ? LOCK_ON : LOCK_OFF} />

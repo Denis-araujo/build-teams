@@ -113,3 +113,17 @@ describe('canMoveToTeam', () => {
     expect(canMoveToTeam(base(), 'd', 1)).toEqual({ ok: true })
   })
 })
+
+describe('ids que não estão no sorteio', () => {
+  it('moveToTeam, moveToReserves e swapPlayers devolvem o mesmo sorteio', () => {
+    const d = base()
+    expect(moveToTeam(d, 'zzz', 1)).toBe(d)
+    expect(moveToReserves(d, 'zzz')).toBe(d)
+    expect(swapPlayers(d, 'a', 'zzz')).toBe(d)
+    expect(swapPlayers(d, 'zzz', 'a')).toBe(d)
+    expect(toggleLock(d, 'zzz')).toBe(d)
+  })
+  it('canMoveToTeam recusa', () => {
+    expect(canMoveToTeam(base(), 'zzz', 1)).toEqual({ ok: false, reason: 'Jogador não está mais no sorteio.' })
+  })
+})

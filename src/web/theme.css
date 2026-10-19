@@ -230,7 +230,7 @@ a, a:hover { color: var(--gold-ink); }
   border-radius: var(--radius-sm);
 }
 .icon-btn:focus-visible, .move-select:focus-visible, .copy-fallback:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-.icon-btn:disabled, .move-select:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn[aria-disabled='true'], .move-select[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
 .move-select {
   flex: 0 1 auto;
   min-width: 0;
