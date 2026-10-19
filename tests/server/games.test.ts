@@ -7,6 +7,7 @@ import {
   deleteActiveGame,
   getActiveGame,
   getSetting,
+  isUniqueViolation,
   saveDraw,
   setPaid,
   setSetting,
@@ -140,5 +141,65 @@ describe('games', () => {
     expect(await getSetting(db, 'member_sees_stars')).toBe(true)
     await setSetting(db, 'member_sees_stars', false)
     expect(await getSetting(db, 'member_sees_stars')).toBe(false)
+  })
+
+  it('only translates unique-constraint failures', () => {
+    expect(isUniqueViolation(new Error('UNIQUE constraint failed: games.state'))).toBe(true)
+    expect(isUniqueViolation(new Error('FOREIGN KEY constraint failed'))).toBe(false)
+    expect(isUniqueViolation('x')).toBe(false)
+  })
+
+  describe('concurrency', () => {
+    // Runs `hook` once, right after the first read of game_paid (the gap between read and write).
+    function withGap(db: D1Database, hook: () => Promise<void>): D1Database {
+      let done = false
+      type Stmt = D1PreparedStatement
+      const wrap = (stmt: Stmt, gap: boolean): Stmt =>
+        ({
+          ...stmt,
+          bind: (...a: unknown[]) => wrap(stmt.bind(...a), gap),
+          all: async () => {
+            const r = await stmt.all()
+            if (gap && !done) {
+              done = true
+              await hook()
+            }
+            return r
+          },
+        }) as unknown as Stmt
+      return new Proxy(db, {
+        get: (t, k) =>
+          k === 'prepare'
+            ? (sql: string) => wrap(t.prepare(sql), /FROM game_paid WHERE game_id/.test(sql))
+            : (t as never)[k],
+      })
+    }
+
+    it('saveDraw never stores a player unpaid concurrently', async () => {
+      const { db, a, b } = await setup()
+      await setPaid(db, a.id, true)
+      await setPaid(db, b.id, true)
+      const state: DrawState = { teamCount: 2, teamSize: 2, teams: [[a.id], [b.id]], reserves: [], locks: {} }
+      const racy = withGap(db, async () => {
+        await setPaid(db, b.id, false)
+      })
+      await expect(saveDraw(racy, state)).rejects.toThrow(ValidationError)
+      const g = (await getActiveGame(db))!
+      expect(g.paid).toEqual([a.id])
+      expect(JSON.stringify(g.draw)).not.toContain(b.id)
+    })
+
+    it('setPaid(false) does not overwrite a concurrent saveDraw', async () => {
+      const { db, a, b, c } = await setup()
+      for (const p of [a, b, c]) await setPaid(db, p.id, true)
+      await saveDraw(db, { teamCount: 2, teamSize: 2, teams: [[a.id], [b.id]], reserves: [], locks: {} })
+      const edited: DrawState = { teamCount: 2, teamSize: 2, teams: [[a.id, c.id], [b.id]], reserves: [], locks: {} }
+      const racy = withGap(db, async () => {
+        await saveDraw(db, edited)
+      })
+      const g = await setPaid(racy, a.id, false)
+      expect(g.paid.sort()).toEqual([b.id, c.id].sort())
+      expect(g.draw!.teams).toEqual([[c.id], [b.id]])
+    })
   })
 })

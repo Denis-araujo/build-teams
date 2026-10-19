@@ -13,6 +13,7 @@ CREATE TABLE games (
   team_count INTEGER NOT NULL,
   team_size INTEGER NOT NULL,
   draw_json TEXT,
+  revision INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
