@@ -257,14 +257,14 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
 
   return (
     <section
-      aria-label="Jogadores"
+      aria-label="Elenco"
       className="flex-[1_1_320px] max-w-[400px] min-w-0 flex flex-col bg-surface rounded-lg shadow-sm overflow-hidden"
     >
       <div className="pt-[18px] px-[18px] pb-[14px] flex flex-col gap-[14px]">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="m-0 text-[20px] font-medium tracking-[-0.01em]">Jogadores</h2>
+          <h2 className="m-0 text-[20px] font-medium tracking-[-0.01em]">Elenco</h2>
           <span className="text-[13px] text-neutral-400 tabular-nums">
-            {paidCount} de {players.length} pagaram
+            <strong className="font-medium text-text">{paidCount}</strong> de {players.length} jogadores
           </span>
         </div>
 

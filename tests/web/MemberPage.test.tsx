@@ -84,7 +84,7 @@ describe('MemberPage', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('mostra o dia, a hora e o elenco com o status de pagamento, sem botões de admin', async () => {
+  it('mostra o dia, a hora e o elenco com "fora" para quem não pagou, sem botões de admin', async () => {
     setup(game())
     expect(await screen.findByText('Próximo jogo')).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Jogo' }).textContent).toContain('Sábado, 17 de outubro às 19:00')
@@ -94,8 +94,12 @@ describe('MemberPage', () => {
     expect(screen.getByText('Os times ainda não foram sorteados')).toBeTruthy()
     expect(screen.getByText('Rafael')).toBeTruthy()
     expect(screen.getByText('Bruno')).toBeTruthy()
-    expect(screen.getAllByText('Pago')).toHaveLength(1)
-    expect(screen.getAllByText('Aguardando')).toHaveLength(1)
+    expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '1 de 2 jogadores')).toBeTruthy()
+    expect(screen.getAllByText('fora')).toHaveLength(1)
+    expect(screen.getByText('Bruno').closest('li')!.className).toContain('opacity-50')
+    expect(screen.getByText('Rafael').closest('li')!.className).not.toContain('opacity-50')
+    expect(screen.queryByText('Pago')).toBeNull()
+    expect(screen.queryByText('Aguardando')).toBeNull()
   })
 
   it('sem rating na resposta não há estrelas na tela', async () => {
@@ -130,11 +134,11 @@ describe('MemberPage', () => {
     expect(await screen.findByRole('heading', { name: 'Time A' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Time B' })).toBeTruthy()
     expect(screen.getAllByText('1 jogador')).toHaveLength(2)
-    expect(screen.getByRole('heading', { name: 'Reservas' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Reservas · 1' })).toBeTruthy()
     const cardA = screen.getByRole('heading', { name: 'Time A' }).closest('section')!
     expect(cardA.textContent).toContain('Rafael')
     expect(cardA.textContent).not.toContain('p1')
-    const reserves = screen.getByRole('heading', { name: 'Reservas' }).closest('section')!
+    const reserves = screen.getByRole('heading', { name: 'Reservas · 1' }).closest('section')!
     expect(reserves.textContent).toContain('Caio')
     expect(document.body.textContent).not.toMatch(/p[123]/)
     expect(screen.queryByText('Os times ainda não foram sorteados')).toBeNull()

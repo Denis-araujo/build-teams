@@ -20,18 +20,17 @@ function Roster({ game }: { game: PublicGame }) {
     <section className="flex min-w-0 max-w-[380px] flex-[1_1_300px] flex-col overflow-hidden rounded-lg bg-surface shadow-sm">
       <div className="flex items-baseline justify-between gap-2 px-[18px] pt-[18px] pb-[10px]">
         <h2 className="m-0 text-[20px] font-medium tracking-[-0.01em]">Elenco</h2>
-        <span className="text-[13px] text-neutral-400">{count(game.players.length)}</span>
+        <span className="text-[13px] text-neutral-400">{game.players.filter((p) => p.paid).length} de {game.players.length} jogadores</span>
       </div>
       <ul className="m-0 flex list-none flex-col px-2 pb-2">
         {game.players.map((p) => (
-          <li key={p.id} className="flex items-center gap-[10px] border-t border-neutral-900 px-[10px] py-2">
+          <li
+            key={p.id}
+            className={`flex items-center gap-[10px] border-t border-neutral-900 px-[10px] py-2 ${p.paid ? '' : 'opacity-50'}`}
+          >
             <span className="min-w-0 flex-1 text-sm">{p.name}</span>
+            {!p.paid && <span className="text-[11px] tracking-[0.04em] uppercase text-neutral-500">fora</span>}
             {p.rating !== undefined && <StarRating value={p.rating} size={15} />}
-            <span
-              className={`text-[11px] tracking-[0.04em] uppercase ${p.paid ? 'text-gold-ink' : 'text-neutral-500'}`}
-            >
-              {p.paid ? 'Pago' : 'Aguardando'}
-            </span>
           </li>
         ))}
       </ul>
@@ -181,7 +180,7 @@ export default function MemberPage() {
               {hasTeams && <TeamCards game={game} />}
               {hasTeams && reserves.length > 0 && (
                 <section className="flex flex-wrap items-center gap-x-3 gap-y-[10px] rounded-lg border border-dashed border-neutral-700 px-4 py-[14px]">
-                  <h2 className="m-0 text-xs font-normal uppercase tracking-[0.06em] text-neutral-500">Reservas</h2>
+                  <h2 className="m-0 text-xs font-normal uppercase tracking-[0.06em] text-neutral-500">Reservas · {reserves.length}</h2>
                   <ul className="m-0 flex list-none flex-wrap gap-[6px] p-0">
                     {reserves.map((p) => (
                       <li key={p.id} className="flex items-center gap-[6px] rounded-full bg-surface px-[10px] py-1 text-[13px] shadow-sm">

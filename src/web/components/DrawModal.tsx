@@ -5,6 +5,8 @@ type Cfg = { teamCount: number; teamSize: number }
 type Props = {
   open: boolean
   paidCount: number
+  /** Total de jogadores do elenco (subtítulo "N de M jogadores"). */
+  total: number
   initial: Cfg
   lockedCount: number
   hasTeams: boolean
@@ -21,13 +23,13 @@ export function summaryText(n: number, teams: number, size: number, locked: numb
     hasTeams && locked
       ? ` ${locked} ${locked === 1 ? 'jogador travado será mantido.' : 'jogadores travados serão mantidos.'}`
       : ''
-  if (n < teams) return `Marque pelo menos ${teams} jogadores como pagos (um por time).`
+  if (n < teams) return `Convoque pelo menos ${teams} jogadores (um por time).`
   if (n > slots) {
     const extra = n - slots
-    return `${slots} vagas · ${extra} ${extra === 1 ? 'convocado fica' : 'convocados ficam'} como reserva.${lk}`
+    return `${slots} vagas · ${extra} ${extra === 1 ? 'jogador fica' : 'jogadores ficam'} como reserva.${lk}`
   }
-  if (n === slots) return `${slots} vagas · todos os ${n} pagos jogam.${lk}`
-  return `${n} pagos para ${slots} vagas · alguns times ficam com menos jogadores.${lk}`
+  if (n === slots) return `${slots} vagas · todos os ${n} jogadores jogam.${lk}`
+  return `${n} jogadores para ${slots} vagas · alguns times ficam com menos jogadores.${lk}`
 }
 
 function Stepper(props: {
@@ -63,7 +65,7 @@ function Stepper(props: {
   )
 }
 
-function Dialog({ paidCount, initial, lockedCount, hasTeams, onConfirm, onClose }: Omit<Props, 'open'>) {
+function Dialog({ paidCount, total, initial, lockedCount, hasTeams, onConfirm, onClose }: Omit<Props, 'open'>) {
   const [teams, setTeams] = useState(initial.teamCount)
   const [size, setSize] = useState(initial.teamSize)
   const titleId = useId()
@@ -119,9 +121,9 @@ function Dialog({ paidCount, initial, lockedCount, hasTeams, onConfirm, onClose 
       >
         <div className="flex flex-col gap-1">
           <h2 id={titleId} className="m-0 text-[22px] font-medium tracking-[-0.01em]">
-            Montar times
+            Formato do jogo
           </h2>
-          <span className="text-[13px] text-neutral-400">{paidCount} pagaram</span>
+          <span className="text-[13px] text-neutral-400">{paidCount} de {total} jogadores</span>
         </div>
         <div className="grid grid-cols-3 gap-2">
           {PRESETS.map(([t, z]) => {

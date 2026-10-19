@@ -62,11 +62,12 @@ describe('login', () => {
     return input
   }
 
-  it('a tela de login tem um único h1 "Administrador"', async () => {
+  it('a tela de login tem um único h1 "Entrar como administrador"', async () => {
     setup({ 'GET /api/admin/me': { status: 401 } })
     await screen.findByLabelText('Senha')
     const h1 = screen.getAllByRole('heading', { level: 1 })
-    expect(h1.map((h) => h.textContent)).toEqual(['Administrador'])
+    expect(h1.map((h) => h.textContent)).toEqual(['Entrar como administrador'])
+    expect(screen.getByText('Só o organizador convoca, dá estrelas e sorteia os times.')).toBeTruthy()
   })
 
   it('sem sessão mostra o formulário de senha', async () => {
@@ -78,7 +79,7 @@ describe('login', () => {
   it('senha errada mostra "Senha incorreta" e limpa o campo', async () => {
     setup(loggedOut({ status: 401, body: { error: 'Senha incorreta' } }))
     const input = await submit()
-    expect((await screen.findByRole('alert')).textContent).toBe('Senha incorreta')
+    expect((await screen.findByRole('alert')).textContent).toBe('Senha incorreta.')
     expect(input.value).toBe('')
   })
 
@@ -140,16 +141,18 @@ describe('Limpar com sorteio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Limpar' }))
     fireEvent.click(screen.getByRole('button', { name: 'Limpar tudo' }))
     expect(await screen.findByText('Monte os times em três passos')).toBeTruthy()
-    expect(screen.getByText('0 de 1 pagaram')).toBeTruthy()
+    expect(
+      screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '0 de 1 jogadores'),
+    ).toBeTruthy()
   })
 })
 
 describe('estrutura', () => {
-  it('logado, o único h1 é "Times" e "Jogadores" é h2', async () => {
+  it('logado, o único h1 é "Times" e "Elenco" é h2', async () => {
     setup(authed())
     await screen.findByText('Nenhum jogo marcado')
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Times'])
-    expect(screen.getByRole('heading', { level: 2, name: 'Jogadores' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: 'Elenco' })).toBeTruthy()
   })
 })
 

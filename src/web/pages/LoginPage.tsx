@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 
 function loginError(e: unknown): string {
-  if (e instanceof UnauthorizedError) return 'Senha incorreta'
+  if (e instanceof UnauthorizedError) return 'Senha incorreta.'
   if (e instanceof HttpError && e.status === 429) return 'Muitas tentativas. Tente de novo em alguns minutos.'
   if (e instanceof HttpError && e.status === 503) return 'Servidor sem senha configurada'
   return 'Não foi possível entrar. Tente de novo.'
@@ -35,7 +35,10 @@ export default function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
         className="w-full max-w-[380px] bg-surface rounded-lg shadow-md p-[28px] flex flex-col gap-[18px] box-border"
         onSubmit={submit}
       >
-        <h1 className="m-0 text-[24px] font-medium tracking-[-0.01em]">Administrador</h1>
+        <div className="flex flex-col gap-[6px]">
+          <h1 className="m-0 text-[24px] font-medium tracking-[-0.01em]">Entrar como administrador</h1>
+          <span className="text-[14px] text-neutral-400 text-pretty">Só o organizador convoca, dá estrelas e sorteia os times.</span>
+        </div>
         <label className="flex flex-col gap-[6px] text-[13px] text-neutral-400">
           Senha
           <input

@@ -176,15 +176,23 @@ describe('sortear', () => {
     expect(screen.getByText('Desequilibrado')).toBeTruthy()
   })
 
-  it('aviso de quem pagou depois do sorteio', () => {
+  it('rodapé com as duas dicas e sem aviso quando ninguém ficou de fora', () => {
+    const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
+    setup(GAME(['a', 'b'], draw), () => respond(500))
+    expect(screen.getByText('Arraste para trocar de time')).toBeTruthy()
+    expect(screen.getByText('Cadeado mantém o jogador no time ao sortear de novo')).toBeTruthy()
+    expect(screen.queryByText(/de fora/)).toBeNull()
+  })
+
+  it('aviso de jogador que ficou de fora depois do sorteio', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
     setup(GAME(['a', 'b', 'c'], draw), () => respond(500))
-    expect(screen.getByText('1 pagou e ficou de fora — sorteie de novo para incluir.')).toBeTruthy()
+    expect(screen.getByText('1 jogador ficou de fora — sorteie de novo para incluir.')).toBeTruthy()
   })
   it('aviso no plural', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
     setup(GAME(['a', 'b', 'c', 'd'], draw), () => respond(500))
-    expect(screen.getByText('2 pagaram e ficaram de fora — sorteie de novo para incluir.')).toBeTruthy()
+    expect(screen.getByText('2 jogadores ficaram de fora — sorteie de novo para incluir.')).toBeTruthy()
   })
 
   it('Sortear de novo reenvia a config guardada, mantém travas só de pagos', async () => {

@@ -329,17 +329,22 @@ export function DrawArea({ game, players, onGameChange, onUnauthorized, onStale 
               reserves={draw.reserves.flatMap((id) => playersById.get(id) ?? [])}
             />
           )}
-          {outside > 0 && (
-            <p className="m-0 text-xs text-gold-ink">
-              {outside} {outside === 1 ? 'pagou e ficou' : 'pagaram e ficaram'} de fora — sorteie de novo para incluir.
-            </p>
-          )}
+          <div className="flex flex-wrap gap-x-[18px] gap-y-[6px] text-xs text-neutral-500">
+            <span>Arraste para trocar de time</span>
+            <span>Cadeado mantém o jogador no time ao sortear de novo</span>
+            {outside > 0 && (
+              <span className="text-gold-ink">
+                {outside} {outside === 1 ? 'jogador ficou' : 'jogadores ficaram'} de fora — sorteie de novo para incluir.
+              </span>
+            )}
+          </div>
         </>
       )}
 
       <DrawModal
         open={modalOpen}
         paidCount={paidPlayers.length}
+        total={players.length}
         initial={config}
         lockedCount={lockedCount}
         hasTeams={hasTeams}

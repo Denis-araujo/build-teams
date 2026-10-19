@@ -13,6 +13,7 @@ function setup(over: Over = {}) {
     <DrawModal
       open
       paidCount={14}
+      total={16}
       initial={{ teamCount: 2, teamSize: 6 }}
       lockedCount={0}
       hasTeams={false}
@@ -31,39 +32,39 @@ describe('estrutura', () => {
     setup({ open: false })
     expect(screen.queryByRole('dialog')).toBeNull()
   })
-  it('dialog modal rotulado pelo título, com a contagem de pagos', () => {
+  it('dialog modal rotulado pelo título, com a contagem de jogadores', () => {
     setup()
-    const d = screen.getByRole('dialog', { name: 'Montar times' })
+    const d = screen.getByRole('dialog', { name: 'Formato do jogo' })
     expect(d.getAttribute('aria-modal')).toBe('true')
-    expect(screen.getByText('14 pagaram')).toBeTruthy()
+    expect(screen.getByText('14 de 16 jogadores')).toBeTruthy()
   })
 })
 
 describe('resumo', () => {
   it('14 pagos, 2x6', () => {
     setup()
-    expect(screen.getByText('12 vagas · 2 convocados ficam como reserva.')).toBeTruthy()
+    expect(screen.getByText('12 vagas · 2 jogadores ficam como reserva.')).toBeTruthy()
   })
   it('singular', () => {
     setup({ paidCount: 13 })
-    expect(screen.getByText('12 vagas · 1 convocado fica como reserva.')).toBeTruthy()
+    expect(screen.getByText('12 vagas · 1 jogador fica como reserva.')).toBeTruthy()
   })
   it('todos jogam', () => {
     setup({ paidCount: 12 })
-    expect(screen.getByText('12 vagas · todos os 12 pagos jogam.')).toBeTruthy()
+    expect(screen.getByText('12 vagas · todos os 12 jogadores jogam.')).toBeTruthy()
   })
   it('menos pagos que vagas', () => {
     setup({ paidCount: 10 })
-    expect(screen.getByText('10 pagos para 12 vagas · alguns times ficam com menos jogadores.')).toBeTruthy()
+    expect(screen.getByText('10 jogadores para 12 vagas · alguns times ficam com menos jogadores.')).toBeTruthy()
   })
   it('menos pagos que times', () => {
     setup({ paidCount: 1 })
-    expect(screen.getByText('Marque pelo menos 2 jogadores como pagos (um por time).')).toBeTruthy()
+    expect(screen.getByText('Convoque pelo menos 2 jogadores (um por time).')).toBeTruthy()
     expect(confirmBtn().disabled).toBe(true)
   })
   it('nota de travas só com sorteio existente', () => {
     setup({ hasTeams: true, lockedCount: 1 })
-    expect(screen.getByText('12 vagas · 2 convocados ficam como reserva. 1 jogador travado será mantido.')).toBeTruthy()
+    expect(screen.getByText('12 vagas · 2 jogadores ficam como reserva. 1 jogador travado será mantido.')).toBeTruthy()
     cleanup()
     setup({ hasTeams: true, lockedCount: 3 })
     expect(screen.getByText(/3 jogadores travados serão mantidos\.$/)).toBeTruthy()
@@ -77,7 +78,7 @@ describe('controles', () => {
   it('atalho 3 times de 4 ajusta os dois valores', () => {
     setup()
     click('3 times de 4')
-    expect(screen.getByText('12 vagas · 2 convocados ficam como reserva.')).toBeTruthy()
+    expect(screen.getByText('12 vagas · 2 jogadores ficam como reserva.')).toBeTruthy()
     expect(screen.getByTestId('teams-value').textContent).toBe('3')
     expect(screen.getByTestId('size-value').textContent).toBe('4')
   })
@@ -122,14 +123,14 @@ describe('fechar e foco', () => {
   })
   it('remove o listener de Esc ao fechar', () => {
     const onClose = vi.fn()
-    const props = { paidCount: 14, initial: { teamCount: 2, teamSize: 6 }, lockedCount: 0, hasTeams: false, onConfirm: vi.fn(), onClose }
+    const props = { paidCount: 14, total: 16, initial: { teamCount: 2, teamSize: 6 }, lockedCount: 0, hasTeams: false, onConfirm: vi.fn(), onClose }
     const { rerender } = render(<DrawModal open {...props} />)
     rerender(<DrawModal open={false} {...props} />)
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).not.toHaveBeenCalled()
   })
   it('foco entra no dialog e volta ao abridor', () => {
-    const props = { paidCount: 14, initial: { teamCount: 2, teamSize: 6 }, lockedCount: 0, hasTeams: false, onConfirm: vi.fn(), onClose: vi.fn() }
+    const props = { paidCount: 14, total: 16, initial: { teamCount: 2, teamSize: 6 }, lockedCount: 0, hasTeams: false, onConfirm: vi.fn(), onClose: vi.fn() }
     const opener = document.createElement('button')
     document.body.appendChild(opener)
     opener.focus()

@@ -45,6 +45,10 @@ const calls = (f: ReturnType<typeof vi.fn>, key: string) =>
   f.mock.calls.filter(([p, i]) => `${(i as RequestInit | undefined)?.method ?? 'GET'} ${p}` === key)
 const body = (c: unknown[]) => (c[1] as RequestInit).body
 
+// O número do contador vai em <strong> (markup do v4): casa pelo texto do span inteiro.
+const counterEl = (text: string) => (_: string, el: Element | null) => el?.tagName === 'SPAN' && el.textContent === text
+const counter = (text: string) => screen.getByText(counterEl(text))
+const counterAsync = (text: string) => screen.findByText(counterEl(text))
 const pagou = (name: string) => screen.findByLabelText(`Pagou: ${name}`) as Promise<HTMLInputElement>
 
 beforeEach(() => {
@@ -175,7 +179,7 @@ describe('lista', () => {
 })
 
 describe('pagamentos', () => {
-  it('mostra "0 de 2 pagaram" e atualiza pelo jogo RETORNADO', async () => {
+  it('mostra "0 de 2 jogadores" e atualiza pelo jogo RETORNADO', async () => {
     const f = setup(
       authed({
         // servidor devolve um estado diferente do que o clique sugere: vale o retornado
@@ -183,9 +187,9 @@ describe('pagamentos', () => {
       }),
     )
     const box = await pagou('Ana')
-    expect(screen.getByText('0 de 2 pagaram')).toBeTruthy()
+    expect(counter('0 de 2 jogadores')).toBeTruthy()
     fireEvent.click(box)
-    expect(await screen.findByText('2 de 2 pagaram')).toBeTruthy()
+    expect(await counterAsync('2 de 2 jogadores')).toBeTruthy()
     expect(body(calls(f, 'PUT /api/admin/game/paid')[0])).toBe('{"playerId":"p1","paid":true}')
     expect((await pagou('Bia')).checked).toBe(true)
   })
@@ -199,9 +203,9 @@ describe('pagamentos', () => {
     )
     const box = await pagou('Ana')
     expect(box.checked).toBe(true)
-    expect(screen.getByText('1 de 2 pagaram')).toBeTruthy()
+    expect(counter('1 de 2 jogadores')).toBeTruthy()
     fireEvent.click(box)
-    expect(await screen.findByText('0 de 2 pagaram')).toBeTruthy()
+    expect(await counterAsync('0 de 2 jogadores')).toBeTruthy()
     expect(body(calls(f, 'PUT /api/admin/game/paid')[0])).toBe('{"playerId":"p1","paid":false}')
   })
 
@@ -210,7 +214,7 @@ describe('pagamentos', () => {
     const box = await pagou('Ana')
     expect(box.disabled).toBe(true)
     expect(box.title).toBe('Cadastre a data do jogo primeiro')
-    expect(screen.getByText('0 de 2 pagaram')).toBeTruthy()
+    expect(counter('0 de 2 jogadores')).toBeTruthy()
   })
 
   it('dois cliques rápidos na mesma caixa não enviam requisições sobrepostas', async () => {
@@ -237,7 +241,7 @@ describe('pagamentos', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/pagamento/i)
     expect(box.checked).toBe(false)
     expect(box.disabled).toBe(false)
-    expect(screen.getByText('0 de 2 pagaram')).toBeTruthy()
+    expect(counter('0 de 2 jogadores')).toBeTruthy()
   })
 })
 
@@ -383,7 +387,7 @@ describe('casos extras', () => {
   it('id arquivado restante em game.paid não infla o contador', async () => {
     setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1', 'arquivado'] } } }))
     await pagou('Ana')
-    expect(screen.getByText('1 de 2 pagaram')).toBeTruthy()
+    expect(counter('1 de 2 jogadores')).toBeTruthy()
   })
 
   it('erro de linha inclui o nome do jogador', async () => {
@@ -404,7 +408,7 @@ describe('Marcar todos / Limpar', () => {
     await pagou('Ana')
     expect(screen.getByText('Quem vai jogar')).toBeTruthy()
     fireEvent.click(all())
-    expect(await screen.findByText('2 de 2 pagaram')).toBeTruthy()
+    expect(await counterAsync('2 de 2 jogadores')).toBeTruthy()
     expect(body(calls(f, 'PUT /api/admin/game/paid-all')[0])).toBe('{"paid":true}')
     expect((await pagou('Bia')).checked).toBe(true)
   })
@@ -418,7 +422,7 @@ describe('Marcar todos / Limpar', () => {
     )
     await pagou('Ana')
     fireEvent.click(none())
-    expect(await screen.findByText('0 de 2 pagaram')).toBeTruthy()
+    expect(await counterAsync('0 de 2 jogadores')).toBeTruthy()
     expect(body(calls(f, 'PUT /api/admin/game/paid-all')[0])).toBe('{"paid":false}')
     expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
   })
@@ -436,7 +440,7 @@ describe('Marcar todos / Limpar', () => {
     expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
     const card = screen.getByRole('group', { name: 'Confirmar limpeza' })
     fireEvent.click(within(card).getByRole('button', { name: 'Limpar tudo' }))
-    expect(await screen.findByText('0 de 2 pagaram')).toBeTruthy()
+    expect(await counterAsync('0 de 2 jogadores')).toBeTruthy()
     expect(body(calls(f, 'PUT /api/admin/game/paid-all')[0])).toBe('{"paid":false}')
     expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
     expect(document.activeElement).toBe(all())
