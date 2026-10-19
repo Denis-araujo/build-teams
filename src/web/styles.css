@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+/* Tokens do Montar Times v4 (docs/prototype/v4-design-brief.md 2.1-2.7).
+   Escalas neutral-* e accent-* INVERTIDAS (100 = mais escuro), como no mapa LIGHT do protótipo. */
+@theme static {
+  --color-*: initial;
+  --color-bg: #e4e7f5;
+  --color-surface: #f3f5fe;
+  --color-text: #292b31;
+  --color-accent: #344b78;
+  --color-navy: #24365a;
+  --color-navy-ink: #f3f5fe;
+  --color-navy-muted: #c7d4ea;
+  --color-gold: oklch(0.8 0.15 82);
+  --color-gold-ink: oklch(0.5 0.11 70);
+  --color-gold-soft: oklch(0.86 0.11 85);
+  --color-gold-shade: oklch(0.62 0.13 70 / 0.45);
+  --color-gold-empty: oklch(0.9 0.02 85);
+  --color-gold-tint: oklch(0.95 0.05 88);
+  --color-neutral-100: #292b31;
+  --color-neutral-200: #3f424d;
+  --color-neutral-300: #595d6c;
+  --color-neutral-400: #3f424d;
+  --color-neutral-500: #595d6c;
+  --color-neutral-600: #b2b6ca;
+  --color-neutral-700: #cfd3e5;
+  --color-neutral-800: #cfd3e5;
+  --color-neutral-900: #cfd3e5;
+  --color-accent-100: #172339;
+  --color-accent-200: #24365a;
+  --color-accent-300: #344b78;
+  --color-accent-400: #4a6496;
+  --color-accent-500: #7189b8;
+  --color-accent-600: #9fb2d4;
+  --color-accent-700: #c7d4ea;
+  --color-accent-800: #e1e9f6;
+  --color-accent-900: #f2f6fc;
+  --color-accent-2-100: #172339;
+  --color-accent-2-200: #24365a;
+  --color-accent-2-300: #344b78;
+  --color-accent-2-400: #4a6496;
+  --color-accent-2-500: #7189b8;
+  --color-accent-2-600: #9fb2d4;
+  --color-accent-2-700: #c7d4ea;
+  --color-accent-2-800: #e1e9f6;
+  --color-accent-2-900: #f2f6fc;
+  --color-divider: #cfd3e5;
+  --color-line: #b2b6ca;
+  --color-ink-on-gold: #172339;
+
+  --radius-*: initial;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-*: initial;
+  --shadow-sm: 0 0 0 1px #cfd3e5;
+  --shadow-md: 0 0 0 1px #cfd3e5, 0 6px 18px rgba(41, 43, 49, 0.12);
+  --shadow-lg: 0 0 0 1px #b2b6ca, 0 16px 40px rgba(41, 43, 49, 0.18);
+  --shadow-drop: 0 0 0 2px var(--color-accent), 0 8px 24px rgba(36, 54, 90, 0.18);
+  --shadow-drop-sm: 0 0 0 2px var(--color-accent);
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "Inter", system-ui, sans-serif;
+}
+
+/* Variáveis cruas usadas pelo protótipo e pelos componentes existentes (var(--...)). */
+:root {
+  color-scheme: light;
+  --navy: #24365a;
+  --navy-ink: #f3f5fe;
+  --navy-muted: #c7d4ea;
+  --gold: oklch(0.8 0.15 82);
+  --gold-ink: oklch(0.5 0.11 70);
+  --gold-soft: oklch(0.86 0.11 85);
+  --gold-shade: oklch(0.62 0.13 70 / 0.45);
+  --gold-empty: oklch(0.9 0.02 85);
+  --gold-tint: oklch(0.95 0.05 88);
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-heading-weight: 500;
+  --space-1: 2.8px;
+  --space-2: 5.6px;
+  --space-3: 8.4px;
+  --space-4: 11.2px;
+  --space-6: 16.8px;
+  --space-8: 22.4px;
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    font-weight: 400;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+    margin: 0 0 var(--space-2);
+  }
+  h1 { font-size: 42px; }
+  h2 { font-size: 32px; }
+  h3 { font-size: 25px; }
+  h4 { font-size: 20px; }
+  h5 { font-size: 16px; }
+  h6 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+  p { margin: 0 0 var(--space-3); }
+  a { color: #4a6496; text-underline-offset: 3px; }
+  a:hover { color: #172339; }
+  img { display: block; max-width: 100%; }
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+}
+
+@layer components {
+  .hr {
+    height: 1px; border: 0; margin: var(--space-4) 0;
+    background: linear-gradient(to right, transparent, var(--color-divider) 48px,
+      var(--color-divider) calc(100% - 48px), transparent);
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    cursor: pointer; text-decoration: none;
+    font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+    font-size: 14px; line-height: 1.2; color: var(--color-text);
+    background: transparent; border: 1px solid transparent;
+    padding: var(--space-2) calc(var(--space-3) * 1.2);
+    border-radius: var(--radius-md);
+  }
+  .btn svg { display: block; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary { color: var(--color-accent); border-color: var(--color-accent); }
+  .btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+  .btn-primary:active { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+  .btn-secondary { border-color: var(--color-divider); }
+  .btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+  .btn-secondary:active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+  .btn-ghost { color: var(--color-accent); padding-inline: var(--space-1); }
+  .btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+  .btn-ghost:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+  .btn-icon { width: 36px; height: 36px; padding: 0; }
+  .btn-block { width: 100%; margin-top: var(--space-2); }
+
+  .field > label {
+    display: block; font-size: 12px; margin-bottom: 5px;
+    color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  }
+  .input {
+    width: 100%; min-height: 36px; padding: 6px 10px; font: inherit;
+    font-size: 14px; color: var(--color-text); caret-color: var(--color-accent);
+    background: var(--color-surface);
+    border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+  }
+  .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+  .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+  textarea.input { min-height: 90px; resize: vertical; }
+
+  .tag {
+    display: inline-flex; align-items: center; font-size: 11px;
+    letter-spacing: 0.02em; padding: 3px 10px;
+    border-radius: calc(var(--radius-md) * 0.75);
+  }
+  .tag-accent { background: var(--color-accent-800); color: var(--color-accent-100); }
+  .tag-neutral { background: var(--color-neutral-800); color: var(--color-neutral-100); }
+  .tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+}
