@@ -19,6 +19,9 @@ export function useAdminData(): {
   const [game, setGameState] = useState<Game | null>(null)
   const [settings, setSettingsState] = useState<Settings | null>(null)
   const [players, setPlayersState] = useState<Player[]>([])
+  // Decisão: se uma mutação (setGame/setPlayers/setSettings) chega enquanto uma recarga está em voo,
+  // a recarga é DESCARTADA por inteiro (inclusive os campos que a mutação não tocou). A mutação vem
+  // de uma resposta do servidor mais recente; o próximo reload manual traz o resto.
   // Cada recarga e cada mutação incrementam o contador; recarga que não é a mais recente é descartada.
   const version = useRef(0)
 

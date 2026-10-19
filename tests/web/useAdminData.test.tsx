@@ -42,3 +42,36 @@ it('um reload antigo não sobrescreve o estado definido por uma mutação mais n
   })
   expect(result.current.game).toEqual(FRESH)
 })
+
+it('mutação de jogadores durante uma recarga em voo não é perdida (a recarga é descartada)', async () => {
+  let release: () => void = () => {}
+  let slow = false
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (path: string) => {
+      if (path === '/api/admin/game') {
+        if (slow) await new Promise<void>((r) => (release = r))
+        return res(OLD)
+      }
+      if (path === '/api/admin/settings') return res({ memberSeesStars: false })
+      if (path === '/api/admin/players') return res([])
+      throw new Error(path)
+    }),
+  )
+  const { result } = renderHook(() => useAdminData())
+  await waitFor(() => expect(result.current.status).toBe('ready'))
+  slow = true
+  let pending: Promise<void> = Promise.resolve()
+  act(() => {
+    pending = result.current.reload()
+  })
+  const ana = { id: 'p1', name: 'Ana', rating: 3, archived: false }
+  act(() => result.current.setPlayers([ana]))
+  act(() => result.current.setSettings({ memberSeesStars: true }))
+  await act(async () => {
+    release()
+    await pending
+  })
+  expect(result.current.players).toEqual([ana])
+  expect(result.current.settings).toEqual({ memberSeesStars: true })
+})

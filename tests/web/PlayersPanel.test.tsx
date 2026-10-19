@@ -137,7 +137,7 @@ describe('lista', () => {
     const input = screen.getByLabelText('Nome de Ana') as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Bia' } })
     fireEvent.blur(input)
-    expect((await screen.findByRole('alert')).textContent).toBe('Nome já existe')
+    expect((await screen.findByRole('alert')).textContent).toBe('Ana: Nome já existe')
     expect(input.value).toBe('Ana')
   })
 
@@ -236,5 +236,134 @@ describe('sessão', () => {
   it('401 ao carregar jogadores volta ao login', async () => {
     setup(authed({ 'GET /api/admin/players': { status: 401 } }))
     expect(await screen.findByLabelText('Senha')).toBeTruthy()
+  })
+})
+
+function deferred() {
+  let resolve: (o: Out) => void = () => {}
+  const promise = new Promise<Out>((r) => (resolve = r))
+  return { promise, resolve }
+}
+
+describe('PATCHes por jogador', () => {
+  it('renomear + nota com a 1ª resposta atrasada: fila e merge só do campo alterado', async () => {
+    const first = deferred()
+    let n = 0
+    const f = setup(
+      authed({
+        'PATCH /api/admin/players/p1': (init) => {
+          n++
+          if (n === 1) return first.promise
+          // resposta "velha" quanto ao nome: não pode desfazer a renomeação
+          expect(JSON.parse(init.body as string)).toEqual({ rating: 5 })
+          return { status: 200, body: { ...ANA, name: 'Ana', rating: 5 } }
+        },
+      }),
+    )
+    await pagou('Ana')
+    const input = screen.getByLabelText('Nome de Ana')
+    fireEvent.change(input, { target: { value: 'Ana Maria' } })
+    fireEvent.blur(input)
+    const row = screen.getByTestId('player-p1')
+    fireEvent.click(within(row).getByRole('button', { name: '5 estrelas' }))
+    await waitFor(() => expect(calls(f, 'PATCH /api/admin/players/p1')).toHaveLength(1))
+    first.resolve({ status: 200, body: { ...ANA, name: 'Ana Maria' } })
+    await waitFor(() => expect(within(screen.getByTestId('player-p1')).getByRole('group', { name: '5 estrelas' })).toBeTruthy())
+    expect((screen.getByLabelText('Nome de Ana Maria') as HTMLInputElement).value).toBe('Ana Maria')
+    expect(calls(f, 'PATCH /api/admin/players/p1')).toHaveLength(2)
+  })
+
+  it('renomear que falha + nota que dá certo: reverte só o nome', async () => {
+    const first = deferred()
+    let n = 0
+    setup(
+      authed({
+        'PATCH /api/admin/players/p1': () => {
+          n++
+          return n === 1 ? first.promise : { status: 200, body: { ...ANA, rating: 5 } }
+        },
+      }),
+    )
+    await pagou('Ana')
+    const input = screen.getByLabelText('Nome de Ana') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Bia' } })
+    fireEvent.blur(input)
+    fireEvent.click(within(screen.getByTestId('player-p1')).getByRole('button', { name: '5 estrelas' }))
+    first.resolve({ status: 400, body: { error: 'Nome já existe' } })
+    await waitFor(() => expect(within(screen.getByTestId('player-p1')).getByRole('group', { name: '5 estrelas' })).toBeTruthy())
+    expect(input.value).toBe('Ana')
+    expect(screen.getByRole('alert').textContent).toBe('Ana: Nome já existe')
+  })
+
+  it('PATCHes de jogadores diferentes não se bloqueiam', async () => {
+    const slow = deferred()
+    const f = setup(
+      authed({
+        'PATCH /api/admin/players/p1': () => slow.promise,
+        'PATCH /api/admin/players/p2': { status: 200, body: { ...BIA, rating: 5 } },
+      }),
+    )
+    await pagou('Ana')
+    fireEvent.click(within(screen.getByTestId('player-p1')).getByRole('button', { name: '5 estrelas' }))
+    fireEvent.click(within(screen.getByTestId('player-p2')).getByRole('button', { name: '5 estrelas' }))
+    await waitFor(() => expect(within(screen.getByTestId('player-p2')).getByRole('group', { name: '5 estrelas' })).toBeTruthy())
+    expect(calls(f, 'PATCH /api/admin/players/p1')).toHaveLength(1)
+    slow.resolve({ status: 200, body: { ...ANA, rating: 5 } })
+  })
+})
+
+describe('casos extras', () => {
+  it('remover com clique duplo: uma confirmação e um DELETE', async () => {
+    const d = deferred()
+    const confirm = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirm)
+    const f = setup(authed({ 'DELETE /api/admin/players/p1': () => d.promise }))
+    await pagou('Ana')
+    const btn = screen.getByRole('button', { name: 'Remover Ana' })
+    fireEvent.click(btn)
+    fireEvent.click(btn)
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(calls(f, 'DELETE /api/admin/players/p1')).toHaveLength(1)
+    d.resolve({ status: 204 })
+    await waitFor(() => expect(screen.queryByLabelText('Pagou: Ana')).toBeNull())
+  })
+
+  it('submeter o formulário (Enter) adiciona', async () => {
+    const f = setup(authed({ 'POST /api/admin/players': { status: 201, body: { ...ANA, id: 'p5', name: 'Eva' } } }))
+    await pagou('Ana')
+    fireEvent.change(screen.getByLabelText('Nome do jogador'), { target: { value: 'Eva' } })
+    fireEvent.submit(screen.getByRole('form', { name: 'Novo jogador' }))
+    await pagou('Eva')
+    expect(calls(f, 'POST /api/admin/players')).toHaveLength(1)
+  })
+
+  it('nome de 61 caracteres: mensagem 400 do servidor no alerta', async () => {
+    setup(authed({ 'POST /api/admin/players': { status: 400, body: { error: 'Nome deve ter até 60 caracteres' } } }))
+    await pagou('Ana')
+    fireEvent.change(screen.getByLabelText('Nome do jogador'), { target: { value: 'x'.repeat(61) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Nome deve ter até 60 caracteres')
+  })
+
+  it('nomes duplicados são permitidos, cada linha com sua caixa e estrelas', async () => {
+    setup(authed({ 'GET /api/admin/players': { status: 200, body: [ANA, { ...BIA, name: 'Ana' }] } }))
+    await pagou('Ana').catch(() => {})
+    const boxes = await screen.findAllByLabelText('Pagou: Ana')
+    expect(boxes).toHaveLength(2)
+    expect(within(screen.getByTestId('player-p1')).getByRole('group', { name: '4 estrelas' })).toBeTruthy()
+    expect(within(screen.getByTestId('player-p2')).getByRole('group', { name: '2,5 estrelas' })).toBeTruthy()
+  })
+
+  it('id arquivado restante em game.paid não infla o contador', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1', 'arquivado'] } } }))
+    await pagou('Ana')
+    expect(screen.getByText('1 de 2 pagaram')).toBeTruthy()
+  })
+
+  it('erro de linha inclui o nome do jogador', async () => {
+    setup(authed({ 'PATCH /api/admin/players/p2': { status: 500 } }))
+    await pagou('Ana')
+    fireEvent.click(within(screen.getByTestId('player-p2')).getByRole('button', { name: '5 estrelas' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/^Bia: /)
   })
 })

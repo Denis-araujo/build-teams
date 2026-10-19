@@ -8,7 +8,7 @@ type Props = {
   game: Game | null
   onPlayersChange(players: Player[]): void
   onGameChange(game: Game | null): void
-  onUnauthorized?: () => void
+  onUnauthorized: () => void
 }
 
 const DEFAULT_RATING = 3
@@ -105,10 +105,23 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
   const latest = useRef(players)
   latest.current = players
 
-  function fail(e: unknown, fallback: string, useServerMessage = true) {
-    if (e instanceof UnauthorizedError) onUnauthorized?.()
-    else setError(useServerMessage && e instanceof HttpError && e.serverMessage ? e.serverMessage : fallback)
+  function fail(e: unknown, fallback: string, opts: { who?: string; useServerMessage?: boolean } = {}) {
+    if (e instanceof UnauthorizedError) {
+      onUnauthorized()
+      return
+    }
+    const msg = opts.useServerMessage !== false && e instanceof HttpError && e.serverMessage ? e.serverMessage : fallback
+    setError(opts.who ? `${opts.who}: ${msg}` : msg)
   }
+
+  function applyPlayers(list: Player[]) {
+    latest.current = list
+    onPlayersChange(list)
+  }
+
+  // PATCHes do mesmo jogador entram numa fila (uma por vez); jogadores diferentes não se bloqueiam.
+  const queues = useRef(new Map<string, Promise<unknown>>())
+  const removing = useRef(new Set<string>())
 
   async function add(e: FormEvent) {
     e.preventDefault()
@@ -118,7 +131,7 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     setError(null)
     try {
       const created = await api.createPlayer({ name: trimmed, rating })
-      onPlayersChange([...latest.current, created].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')))
+      applyPlayers([...latest.current, created].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')))
       setName('')
       setRating(DEFAULT_RATING)
     } catch (err) {
@@ -128,26 +141,40 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     }
   }
 
-  async function update(id: string, patch: { name?: string; rating?: number }): Promise<boolean> {
-    setError(null)
-    try {
-      const saved = await api.updatePlayer(id, patch)
-      onPlayersChange(latest.current.map((p) => (p.id === id ? saved : p)))
-      return true
-    } catch (err) {
-      fail(err, 'Não foi possível salvar o jogador. Tente de novo.')
-      return false
+  function update(id: string, patch: { name?: string; rating?: number }): Promise<boolean> {
+    const who = latest.current.find((p) => p.id === id)?.name
+    setError(null) // ao enfileirar, para que o erro de um pedido anterior não seja apagado por este
+    const run = async (): Promise<boolean> => {
+      try {
+        const saved = await api.updatePlayer(id, patch)
+        // Aplica só os campos deste pedido; o resto da linha pode ter sido mudado por outro.
+        const changed: Partial<Player> = {}
+        if (patch.name !== undefined) changed.name = saved.name
+        if (patch.rating !== undefined) changed.rating = saved.rating
+        applyPlayers(latest.current.map((p) => (p.id === id ? { ...p, ...changed } : p)))
+        return true
+      } catch (err) {
+        fail(err, 'Não foi possível salvar o jogador. Tente de novo.', { who })
+        return false
+      }
     }
+    const next = (queues.current.get(id) ?? Promise.resolve()).then(run)
+    queues.current.set(id, next)
+    return next
   }
 
   async function remove(p: Player) {
+    if (removing.current.has(p.id)) return
     if (!window.confirm(`Remover ${p.name}?`)) return
+    removing.current.add(p.id)
     setError(null)
     try {
       await api.archivePlayer(p.id)
-      onPlayersChange(latest.current.filter((x) => x.id !== p.id))
+      applyPlayers(latest.current.filter((x) => x.id !== p.id))
     } catch (err) {
-      fail(err, 'Não foi possível remover o jogador. Tente de novo.')
+      fail(err, 'Não foi possível remover o jogador. Tente de novo.', { who: p.name })
+    } finally {
+      removing.current.delete(p.id)
     }
   }
 
@@ -159,7 +186,8 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     try {
       onGameChange(await api.setPaid(id, paid))
     } catch (err) {
-      fail(err, 'Não foi possível salvar o pagamento. Tente de novo.', false)
+      const who = latest.current.find((p) => p.id === id)?.name
+      fail(err, 'Não foi possível salvar o pagamento. Tente de novo.', { who, useServerMessage: false })
     } finally {
       inFlight.current.delete(id)
       setPending(new Set(inFlight.current))
