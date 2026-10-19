@@ -56,7 +56,7 @@ function PlayerRow(props: {
   }
 
   return (
-    <div className={`flex items-center gap-[10px] px-[10px] py-[6px] rounded-sm hover:bg-bg ${paid ? 'opacity-100' : 'opacity-[0.45]'}`}
+    <div className={`flex items-center gap-[10px] px-[10px] py-[6px] rounded-sm hover:bg-bg ${hasGame && !paid ? 'opacity-[0.45]' : 'opacity-100'}`}
       data-testid={`player-${player.id}`}>
       <input
         type="checkbox"
@@ -226,8 +226,8 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
           className="flex flex-col gap-[10px] p-3 rounded-md bg-bg"
         >
           <label className="flex flex-col gap-1 text-[12px] text-neutral-500">
-            Nome do jogador
-            <input className="input w-full box-border bg-surface" value={name} onChange={(e) => setName(e.target.value)} />
+            <span className="sr-only">Nome do jogador</span>
+            <input className="input w-full box-border bg-surface" placeholder="Nome do novo jogador" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <div className="flex items-center justify-between gap-[10px]">
             <div className="flex items-center gap-2">
@@ -237,6 +237,12 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
               </span>
             </div>
             <button className="btn btn-primary gap-[6px]" type="submit" disabled={adding || !name.trim()}>
+              <svg viewBox="0 0 256 256" width="14" height="14" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"
+                />
+              </svg>
               Adicionar
             </button>
           </div>
