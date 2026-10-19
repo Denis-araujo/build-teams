@@ -1,3 +1,4 @@
+import { formatDayLabel } from '../format'
 import { GameCard } from '../components/GameCard'
 import { SiteHeader } from '../components/SiteHeader'
 import { RatingPill } from '../components/TeamCards'
@@ -93,7 +94,10 @@ export default function MemberPage() {
 
   return (
     <div className="min-h-screen text-text bg-bg">
-      <SiteHeader roleLabel="Membro" titleAsH1 />
+      <SiteHeader
+        roleLabel="Membro"
+        subtitle={game ? formatDayLabel(game.date, game.time) : error || loading ? undefined : 'Sem jogo marcado'}
+      />
 
       <main className="flex flex-wrap gap-[28px] px-[28px] pt-[24px] pb-[56px] items-start max-w-[1440px] mx-auto box-border">
         {!game ? (
@@ -107,14 +111,15 @@ export default function MemberPage() {
           ) : (
             !loading && (
               <div className="w-full">
-                <GameCard date={null} />
+                <GameCard game={null} />
               </div>
             )
           )
         ) : (
           <>
             <div className="flex min-w-0 flex-[3_1_520px] flex-col gap-5">
-              <GameCard date={game.date} />
+              <GameCard game={game} />
+              <h1 className="m-0 text-[32px] font-medium tracking-[-0.02em]">Times</h1>
               {!hasTeams && (
                 <div className="flex flex-col items-start gap-[14px] rounded-lg bg-surface px-[28px] py-[40px] shadow-sm">
                   <div

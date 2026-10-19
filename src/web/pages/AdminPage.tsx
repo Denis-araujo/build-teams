@@ -6,6 +6,7 @@ import { GameBar } from '../components/GameBar'
 import { SettingsToggle } from '../components/SettingsToggle'
 import { useAdminData } from '../hooks/useAdminData'
 import { SiteHeader } from '../components/SiteHeader'
+import { formatDayLabel } from '../format'
 import LoginPage from './LoginPage'
 
 function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
@@ -26,7 +27,17 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
 
   return (
     <>
-      <SiteHeader roleLabel="Administrador" onLogout={() => void logout()} />
+      <SiteHeader
+        roleLabel="Administrador"
+        subtitle={
+          data.status === 'ready'
+            ? data.game
+              ? formatDayLabel(data.game.date, data.game.time)
+              : 'Sem jogo marcado'
+            : undefined
+        }
+        onLogout={() => void logout()}
+      />
       <main className="flex flex-wrap gap-[28px] px-[28px] pt-[24px] pb-[56px] items-start max-w-[1440px] mx-auto box-border">
         {data.status === 'error' && (
           <p className="px-3 py-2 rounded-sm bg-gold-tint text-gold-ink shadow-[inset_0_0_0_1px_var(--gold-soft)]" role="alert">

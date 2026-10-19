@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api, UnauthorizedError } from '../../src/web/api'
-import { formatGameDate } from '../../src/web/format'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -27,10 +26,24 @@ describe('api', () => {
   })
 })
 
-describe('formatGameDate', () => {
-  it('formata virada de ano', () => {
-    expect(formatGameDate('2026-12-31')).toBe('Quinta-feira, 31/12')
-    expect(formatGameDate('2027-01-01')).toBe('Sexta-feira, 01/01')
-    expect(formatGameDate('2026-10-17')).toBe('Sábado, 17/10')
+describe('jogo com hora', () => {
+  it('createGame envia data e hora', async () => {
+    const f = vi.fn(async () => res(201, {}))
+    vi.stubGlobal('fetch', f)
+    await api.createGame('2026-10-24', '20:30')
+    expect(f).toHaveBeenCalledWith(
+      '/api/admin/game',
+      expect.objectContaining({ method: 'POST', body: '{"date":"2026-10-24","time":"20:30"}' }),
+    )
+  })
+
+  it('updateGameDate envia data e hora', async () => {
+    const f = vi.fn(async () => res(200, {}))
+    vi.stubGlobal('fetch', f)
+    await api.updateGameDate('2026-10-31', '19:00')
+    expect(f).toHaveBeenCalledWith(
+      '/api/admin/game',
+      expect.objectContaining({ method: 'PATCH', body: '{"date":"2026-10-31","time":"19:00"}' }),
+    )
   })
 })

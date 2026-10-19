@@ -10,15 +10,12 @@ type Props = {
   roleLabel: string;
   subtitle?: string;
   onLogout?: () => void;
-  /** Transitório: a MemberPage ainda tem teste que exige o título como único h1 (some na Task 11). */
-  titleAsH1?: boolean;
 };
 
 export function SiteHeader({
   roleLabel,
   subtitle,
   onLogout,
-  titleAsH1,
 }: Props) {
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[12px] px-[28px] py-[14px] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] backdrop-blur-[8px] border-b border-neutral-900">
@@ -35,11 +32,7 @@ export function SiteHeader({
           </svg>
         </div>
         <div className="flex flex-col gap-px min-w-0">
-          {titleAsH1 ? (
-            <h1 className={`m-0 leading-[1.55] ${TITLE_CLASS}`}>Escalação</h1>
-          ) : (
-            <span className={TITLE_CLASS}>Escalação</span>
-          )}
+          <span className={TITLE_CLASS}>Escalação</span>
           {subtitle && (
             <span className="text-[12px] text-neutral-400">{subtitle}</span>
           )}

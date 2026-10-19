@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import App from '../../src/web/App'
@@ -42,13 +42,10 @@ const authed = (over: Routes = {}): Routes => ({
 const calls = (f: ReturnType<typeof vi.fn>, key: string) =>
   f.mock.calls.filter(([p, i]) => `${(i as RequestInit | undefined)?.method ?? 'GET'} ${p}` === key)
 
-function dateInput() {
-  return screen.getByLabelText('Data do jogo') as HTMLInputElement
-}
-
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('login', () => {
@@ -120,60 +117,120 @@ describe('login', () => {
 })
 
 describe('GameBar', () => {
-  it('cadastrar data faz POST e mostra a data', async () => {
+  // Congela só o Date (sem tocar nos timers): 19/10/2026 12:00 em Brasília.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-19T15:00:00Z') })
+  })
+
+  const dayInput = () => screen.getByLabelText('Dia') as HTMLInputElement
+  const timeInput = () => screen.getByLabelText('Hora') as HTMLInputElement
+
+  it('marcar jogo faz POST com data e hora e mostra o cartão', async () => {
     const f = setup(authed({ 'POST /api/admin/game': { status: 201, body: GAME } }))
     await screen.findByText('Nenhum jogo marcado')
-    fireEvent.change(dateInput(), { target: { value: '2026-10-24' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Cadastrar jogo' }))
-    expect(await screen.findByText('Sábado, 24/10')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar jogo' }))
+    expect(screen.getByText('Marcar jogo', { selector: 'span' })).toBeTruthy()
+    expect(timeInput().value).toBe('19:00')
+    expect(dayInput().min).toBe('2026-10-19')
+    fireEvent.change(dayInput(), { target: { value: '2026-10-24' } })
+    fireEvent.change(timeInput(), { target: { value: '20:30' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    expect(await screen.findByText('Em 5 dias')).toBeTruthy()
     const [, init] = calls(f, 'POST /api/admin/game')[0]
-    expect((init as RequestInit).body).toBe('{"date":"2026-10-24"}')
-    expect(screen.getByRole('button', { name: 'Alterar data' })).toBeTruthy()
+    expect((init as RequestInit).body).toBe('{"date":"2026-10-24","time":"20:30"}')
+    expect(screen.getByRole('button', { name: 'Alterar' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Excluir' })).toBeTruthy()
+  })
+
+  it('cartão mostra "Próximo jogo", dia, hora e o subtítulo do cabeçalho', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: GAME } }))
+    expect(await screen.findByText('Próximo jogo')).toBeTruthy()
+    expect(screen.getAllByText('Sábado, 24 de outubro · 19:00').length).toBe(1)
+    expect(screen.getByRole('region', { name: 'Jogo' }).textContent).toContain('Sábado, 24 de outubro às 19:00')
+  })
+
+  it('sem jogo o cabeçalho diz "Sem jogo marcado"', async () => {
+    setup(authed())
+    await screen.findByText('Nenhum jogo marcado')
+    expect(screen.getByText('Sem jogo marcado')).toBeTruthy()
+  })
+
+  it('campos vazios mostram "Preencha o dia e a hora." sem chamar a API', async () => {
+    const f = setup(authed())
+    await screen.findByText('Nenhum jogo marcado')
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar jogo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Preencha o dia e a hora.')
+    expect(calls(f, 'POST /api/admin/game').length).toBe(0)
+  })
+
+  it('momento no passado (hoje, hora que já passou) é recusado no cliente', async () => {
+    const f = setup(authed())
+    await screen.findByText('Nenhum jogo marcado')
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar jogo' }))
+    fireEvent.change(dayInput(), { target: { value: '2026-10-19' } })
+    fireEvent.change(timeInput(), { target: { value: '08:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Escolha um dia e uma hora que ainda não passaram.',
+    )
+    expect(calls(f, 'POST /api/admin/game').length).toBe(0)
   })
 
   it('erro 400 do servidor aparece com role=alert', async () => {
     setup(authed({ 'POST /api/admin/game': { status: 400, body: { error: 'Já existe um jogo ativo' } } }))
     await screen.findByText('Nenhum jogo marcado')
-    fireEvent.change(dateInput(), { target: { value: '2026-12-01' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Cadastrar jogo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar jogo' }))
+    fireEvent.change(dayInput(), { target: { value: '2026-12-01' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
     expect((await screen.findByRole('alert')).textContent).toBe('Já existe um jogo ativo')
   })
 
-  it('alterar data faz PATCH', async () => {
+  it('alterar faz PATCH com data e hora', async () => {
     const f = setup(
       authed({
         'GET /api/admin/game': { status: 200, body: GAME },
-        'PATCH /api/admin/game': { status: 200, body: { ...GAME, date: '2026-10-31' } },
+        'PATCH /api/admin/game': { status: 200, body: { ...GAME, date: '2026-10-31', time: '08:05' } },
       }),
     )
-    await screen.findByText('Sábado, 24/10')
-    fireEvent.change(dateInput(), { target: { value: '2026-10-31' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Alterar data' }))
-    expect(await screen.findByText('Sábado, 31/10')).toBeTruthy()
-    expect((calls(f, 'PATCH /api/admin/game')[0][1] as RequestInit).body).toBe('{"date":"2026-10-31"}')
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Alterar' }))
+    expect(screen.getByText('Alterar data do jogo')).toBeTruthy()
+    expect(dayInput().value).toBe('2026-10-24')
+    expect(timeInput().value).toBe('19:00')
+    fireEvent.change(dayInput(), { target: { value: '2026-10-31' } })
+    fireEvent.change(timeInput(), { target: { value: '08:05' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+    expect(await screen.findByText('Sábado, 31 de outubro · 08:05')).toBeTruthy()
+    expect((calls(f, 'PATCH /api/admin/game')[0][1] as RequestInit).body).toBe(
+      '{"date":"2026-10-31","time":"08:05"}',
+    )
   })
 
-  it('excluir pede confirmação e faz DELETE', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true))
+  it('excluir mostra o cartão de confirmação e faz DELETE', async () => {
     const f = setup(
       authed({
         'GET /api/admin/game': { status: 200, body: GAME },
         'DELETE /api/admin/game': { status: 204 },
       }),
     )
-    await screen.findByText('Sábado, 24/10')
-    fireEvent.click(screen.getByRole('button', { name: 'Excluir jogo' }))
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    expect(screen.getByText('Excluir o jogo de sábado, 24/10 às 19:00?')).toBeTruthy()
+    expect(screen.getByText('Pagamentos e sorteio serão perdidos.')).toBeTruthy()
+    expect(calls(f, 'DELETE /api/admin/game').length).toBe(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir data' }))
     expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()
     expect(calls(f, 'DELETE /api/admin/game').length).toBe(1)
   })
 
-  it('excluir cancelado não chama DELETE', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false))
+  it('cancelar a confirmação não chama DELETE', async () => {
     const f = setup(authed({ 'GET /api/admin/game': { status: 200, body: GAME } }))
-    await screen.findByText('Sábado, 24/10')
-    fireEvent.click(screen.getByRole('button', { name: 'Excluir jogo' }))
+    await screen.findByText('Próximo jogo')
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(calls(f, 'DELETE /api/admin/game').length).toBe(0)
-    expect(screen.getByText('Sábado, 24/10')).toBeTruthy()
+    expect(screen.getByText('Próximo jogo')).toBeTruthy()
   })
 })
 

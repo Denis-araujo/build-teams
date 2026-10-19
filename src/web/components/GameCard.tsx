@@ -1,51 +1,92 @@
 import type { ReactNode } from 'react'
-import { formatGameDate } from '../format'
-
-const CALENDAR_PATH =
-  'M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Z'
+import { formatGameWeekday, gameDateParts, relativeDay } from '../format'
+import { Icon } from './icons'
 
 type Props = {
-  /** 'YYYY-MM-DD' do jogo; null = estado vazio. */
-  date: string | null
-  /** Ações à direita (formulário do administrador); o Membro não passa nada. */
+  /** Jogo ativo; null = estado vazio. */
+  game: { date: string; time: string } | null
+  /** Ações do administrador; o Membro não passa nada (cartão somente leitura). */
+  actions?: { onEdit: () => void; onDelete: () => void }
+  /** Substitui o corpo (confirmação de exclusão ou formulário de edição). */
   children?: ReactNode
 }
 
-/** Cartão do jogo do v4 (brief 3.1d): visualização e vazio. Sem hora nem chip relativo ainda. */
-export function GameCard({ date, children }: Props) {
+const ROW = 'flex flex-wrap items-center justify-between gap-x-4 gap-y-3'
+
+/** Cartão do jogo do v4 (brief 3.1d): visualização, vazio e, via children, confirmar/editar. */
+export function GameCard({ game, actions, children }: Props) {
+  const rel = game ? relativeDay(game.date, new Date()) : null
+  const parts = game ? gameDateParts(game.date) : null
   return (
     <section aria-label="Jogo" className="rounded-lg bg-surface px-[18px] py-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        {date ? (
-          <div className="flex min-w-0 items-center gap-[14px]">
-            <div
-              aria-hidden="true"
-              className="flex size-12 flex-none flex-col items-center justify-center rounded-md bg-navy leading-none text-navy-ink"
-            >
-              <span className="text-[10px] tracking-[0.08em] text-gold uppercase">
-                {new Date(`${date}T12:00:00Z`)
-                  .toLocaleDateString('pt-BR', { month: 'short', timeZone: 'UTC' })
-                  .replace('.', '')}
-              </span>
-              <span className="mt-[3px] text-[20px] font-medium tabular-nums">{Number(date.split('-')[2])}</span>
+      {children ??
+        (game && parts && rel ? (
+          <div className={ROW}>
+            <div className="flex min-w-0 items-center gap-[14px]">
+              <div
+                aria-hidden="true"
+                className="flex size-12 flex-none flex-col items-center justify-center rounded-md bg-navy leading-none text-navy-ink"
+              >
+                <span className="text-[10px] tracking-[0.08em] text-gold uppercase">{parts.month}</span>
+                <span className="mt-[3px] text-[20px] font-medium tabular-nums">{parts.day}</span>
+              </div>
+              <div className="flex min-w-0 flex-col gap-[3px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs tracking-[0.06em] text-neutral-500 uppercase">Próximo jogo</span>
+                  <span
+                    className={`rounded-full px-2 py-[2px] text-[11px] font-medium ${
+                      rel === 'Já aconteceu'
+                        ? 'bg-bg text-neutral-400'
+                        : 'bg-gold-tint text-gold-ink shadow-[inset_0_0_0_1px_var(--gold-soft)]'
+                    }`}
+                  >
+                    {rel}
+                  </span>
+                </div>
+                <span className="text-[18px] font-medium tracking-[-0.01em]">
+                  {formatGameWeekday(game.date)} <span className="font-normal text-neutral-400">às</span> {game.time}
+                </span>
+              </div>
             </div>
-            <p className="m-0 min-w-0 text-[18px] font-medium tracking-[-0.01em]">{formatGameDate(date)}</p>
+            {actions && (
+              <div className="flex gap-[6px]">
+                <button className="btn btn-ghost gap-[6px]" type="button" onClick={actions.onEdit}>
+                  <Icon name="pencil" size={14} />
+                  Alterar
+                </button>
+                <button className="btn btn-ghost gap-[6px]" type="button" onClick={actions.onDelete}>
+                  <Icon name="trash" size={14} />
+                  Excluir
+                </button>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="flex items-center gap-[14px]">
-            <div
-              aria-hidden="true"
-              className="flex size-12 flex-none items-center justify-center rounded-md border border-dashed border-neutral-700 text-neutral-500"
-            >
-              <svg viewBox="0 0 256 256" width="20" height="20">
-                <path fill="currentColor" d={CALENDAR_PATH} />
-              </svg>
+          <div className={ROW}>
+            <div className="flex items-center gap-[14px]">
+              <div
+                aria-hidden="true"
+                className="flex size-12 flex-none items-center justify-center rounded-md border border-dashed border-neutral-700 text-neutral-500"
+              >
+                <Icon name="calendar" size={20} />
+              </div>
+              <div className="flex flex-col gap-[3px]">
+                <span className="text-[15px] font-medium">Nenhum jogo marcado</span>
+                <span className="text-[13px] text-neutral-400">
+                  {actions
+                    ? 'Defina o dia e a hora para avisar o grupo.'
+                    : 'O organizador ainda não definiu o dia e a hora.'}
+                </span>
+              </div>
             </div>
-            <p className="m-0 text-[15px] font-medium">Nenhum jogo marcado</p>
+            {actions && (
+              <button className="btn btn-primary gap-[6px]" type="button" onClick={actions.onEdit}>
+                <Icon name="plus" size={14} />
+                Marcar jogo
+              </button>
+            )}
           </div>
-        )}
-        {children}
-      </div>
+        ))}
     </section>
   )
 }

@@ -62,10 +62,10 @@ export const api = {
     }
   },
   getAdminGame: () => request<Game | null>('/api/admin/game'),
-  createGame: (date: string) =>
-    request<Game>('/api/admin/game', { method: 'POST', body: JSON.stringify({ date }) }),
-  updateGameDate: (date: string) =>
-    request<Game>('/api/admin/game', { method: 'PATCH', body: JSON.stringify({ date }) }),
+  createGame: (date: string, time: string) =>
+    request<Game>('/api/admin/game', { method: 'POST', body: JSON.stringify({ date, time }) }),
+  updateGameDate: (date: string, time: string) =>
+    request<Game>('/api/admin/game', { method: 'PATCH', body: JSON.stringify({ date, time }) }),
   deleteGame: () => request<void>('/api/admin/game', { method: 'DELETE' }),
   getSettings: () => request<Settings>('/api/admin/settings'),
   setMemberSeesStars: (memberSeesStars: boolean) =>

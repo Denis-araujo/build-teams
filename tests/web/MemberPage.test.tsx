@@ -47,6 +47,7 @@ describe('MemberPage', () => {
   it('mostra "Nenhum jogo marcado" quando não há jogo', async () => {
     setup(null)
     expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()
+    expect(screen.getByText('Sem jogo marcado')).toBeTruthy()
   })
 
   it('primeira busca falha: avisa que tenta de novo e não diz que não há jogo; o próximo poll recupera', async () => {
@@ -71,9 +72,13 @@ describe('MemberPage', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('mostra a data e o elenco com o status de pagamento', async () => {
+  it('mostra o dia, a hora e o elenco com o status de pagamento, sem botões de admin', async () => {
     setup(game())
-    expect(await screen.findByText('Sábado, 17/10')).toBeTruthy()
+    expect(await screen.findByText('Próximo jogo')).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Jogo' }).textContent).toContain('Sábado, 17 de outubro às 19:00')
+    expect(screen.getByText('Sábado, 17 de outubro · 19:00')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Alterar' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Excluir' })).toBeNull()
     expect(screen.getByText('Os times ainda não foram sorteados')).toBeTruthy()
     expect(screen.getByText('Rafael')).toBeTruthy()
     expect(screen.getByText('Bruno')).toBeTruthy()
@@ -156,9 +161,10 @@ describe('MemberPage', () => {
     expect(screen.queryByRole('heading', { name: 'Reservas' })).toBeNull()
   })
 
-  it('o título da página é h1 e a data aparece como subtítulo', async () => {
+  it('o único h1 é o título da seção "Times"; o cabeçalho é um span', async () => {
     setup(game())
-    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Escalação')
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Times')
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
   it('estrelas dentro dos cards quando há rating', async () => {
