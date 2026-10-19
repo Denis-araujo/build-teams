@@ -4,5 +4,5 @@
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["worker-env.d.ts", "src/server", "src/shared", "functions"]
+  "include": ["src/server", "src/shared", "functions"]
 }
