@@ -21,6 +21,10 @@ type Props = {
   /** Chamado quando o servidor diz que o jogo sumiu (404): a página recarrega os dados. */
   onStale?(): void
   onUnauthorized(): void
+  /** Avisa a página quando um salvamento começa ou termina. */
+  onBusyChange?(busy: boolean): void
+  /** Uma chamada em lote (ex.: marcar todos) está em andamento fora daqui: bloqueia as edições. */
+  externalBusy?: boolean
 }
 
 const HIGHLIGHT_TEAM = '0 0 0 2px var(--color-accent), 0 8px 24px rgba(36,54,90,0.18)'
@@ -35,9 +39,13 @@ const LOCK_OFF =
 
 const DEFAULTS = { teamCount: 2, teamSize: 6 }
 
-export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized, onStale }: Props) {
+export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized, onStale, onBusyChange, externalBusy = false }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const blocked = busy || externalBusy
+  useEffect(() => {
+    onBusyChange?.(busy)
+  }, [busy, onBusyChange])
   const [error, setError] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [over, setOver] = useState<number | 'reserves' | null>(null)
@@ -58,7 +66,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
 
   /** Toda mudança passa por aqui: sanear travas, salvar e só então mostrar o que o servidor devolveu. */
   async function persist(build: () => DrawState, focus?: { id: string; control: 'lock' | 'move' }) {
-    if (!game || inFlight.current) return
+    if (!game || inFlight.current || externalBusy) return
     inFlight.current = true
     setBusy(true)
     setError(null)
@@ -143,14 +151,14 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
     setOver(null)
   }
   const dragStart = (id: string) => (e: DragEvent) => {
-    if (busy) return
+    if (blocked) return
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', id)
     setDragId(id)
   }
   const dropTarget = (target: number | 'reserves') => ({
     onDragOver: (e: DragEvent) => {
-      if (!dragId || busy) return
+      if (!dragId || blocked) return
       e.preventDefault()
       if (over !== target) setOver(target)
     },
@@ -169,7 +177,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
   })
   const rowDrop = (targetId: string) => ({
     onDragOver: (e: DragEvent) => {
-      if (dragId && dragId !== targetId && !busy) e.preventDefault()
+      if (dragId && dragId !== targetId && !blocked) e.preventDefault()
     },
     onDrop: (e: DragEvent) => {
       e.preventDefault()
@@ -180,7 +188,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
     },
   })
   const draggable = (id: string) => ({
-    draggable: !busy,
+    draggable: !blocked,
     onDragStart: dragStart(id),
     onDragEnd: endDrag,
     ...rowDrop(id),
@@ -192,7 +200,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
       <select
         className={MOVE_SELECT}
         aria-label={`Mover ${p.name} para`}
-        aria-disabled={busy}
+        aria-disabled={blocked}
         data-player-id={p.id}
         data-control="move"
         value={current}
@@ -218,14 +226,14 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
   const hasTeams = !!draw && draw.teams.some((t) => t.some((id) => playersById.has(id)))
   const hasPlaced = !!draw && [...draw.teams.flat(), ...draw.reserves].some((id) => playersById.has(id))
   const outside = draw && game ? outsideCount(game.paid, players, draw) : 0
-  const cannotDraw = busy || paidPlayers.length < config.teamCount
+  const cannotDraw = blocked || paidPlayers.length < config.teamCount
 
   return (
     <section
       ref={rootRef}
       className="flex min-w-0 flex-[3_1_520px] flex-col gap-5"
       aria-label="Times"
-      aria-busy={busy}
+      aria-busy={blocked}
     >
       {gameCard}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
@@ -242,8 +250,8 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
             <button
               type="button"
               className="btn btn-ghost gap-[6px]"
-              disabled={!game || busy}
-              aria-busy={busy}
+              disabled={!game || blocked}
+              aria-busy={blocked}
               onClick={() => setModalOpen(true)}
             >
               <Icon name="sliders" size={15} />
@@ -253,7 +261,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
               type="button"
               className="btn btn-primary gap-[6px]"
               disabled={cannotDraw}
-              aria-busy={busy}
+              aria-busy={blocked}
               onClick={() => void runDraw(config)}
             >
               <Icon name="shuffle" size={15} />
@@ -278,7 +286,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
             marked={paidPlayers.length}
             total={players.length}
             hasGame={!!game}
-            busy={busy}
+            busy={blocked}
             onOpen={() => setModalOpen(true)}
           />
           {/* v4: a grade vazia dos times continua na coluna e soma um gap de 20px. */}
@@ -306,7 +314,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
                     }`}
                     aria-pressed={locked}
                     aria-label={locked ? `Destravar ${player.name}` : `Travar ${player.name} neste time`}
-                    aria-disabled={busy}
+                    aria-disabled={blocked}
                     data-player-id={player.id}
                     data-control="lock"
                     title={locked ? `Destravar ${player.name}` : `Travar ${player.name} neste time`}

@@ -147,6 +147,80 @@ describe('Limpar com sorteio', () => {
   })
 })
 
+describe('salvar sorteio x chamada em lote não se sobrepõem', () => {
+  const ana = { id: 'p1', name: 'Ana', rating: 4, archived: false }
+  const bia = { id: 'p2', name: 'Bia', rating: 3, archived: false }
+  const draw = { teamCount: 2, teamSize: 1, teams: [['p1'], ['p2']], reserves: [], locks: {} }
+  const game = { ...GAME, paid: ['p1', 'p2'], draw }
+
+  function gated(path: string) {
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const f = setup(
+      authed({
+        'GET /api/admin/game': { status: 200, body: game },
+        'GET /api/admin/players': { status: 200, body: [ana, bia] },
+      }),
+    )
+    const original = f.getMockImplementation() as (p: string, init?: RequestInit) => Promise<Response>
+    f.mockImplementation(async (p: string, init: RequestInit = {}) => {
+      if (p === path) {
+        await gate
+        return respond(200, path.endsWith('draw') ? game : { ...game, paid: [], draw: null })
+      }
+      return original(p, init)
+    })
+    return release
+  }
+  const all = () => screen.getByRole('button', { name: 'Marcar todos' }) as HTMLButtonElement
+  const clear = () => screen.getByRole('button', { name: 'Limpar' }) as HTMLButtonElement
+
+  it('com um salvamento do sorteio pendente, Marcar todos e Limpar ficam desabilitados', async () => {
+    const release = gated('/api/admin/game/draw')
+    await screen.findByLabelText('Pagou: Ana')
+    expect(all().disabled).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Sortear de novo' }))
+    await waitFor(() => expect(all().disabled).toBe(true))
+    expect(clear().disabled).toBe(true)
+    expect(all().getAttribute('aria-busy')).toBe('true')
+    release()
+    await waitFor(() => expect(all().disabled).toBe(false))
+    expect(clear().disabled).toBe(false)
+  })
+
+  it('com uma chamada em lote pendente, o sorteio e as travas ficam bloqueados', async () => {
+    const release = gated('/api/admin/game/paid-all')
+    await screen.findByLabelText('Pagou: Ana')
+    fireEvent.click(all())
+    const again = () => screen.getByRole('button', { name: 'Sortear de novo' }) as HTMLButtonElement
+    const format = () => screen.getByRole('button', { name: 'Formato' }) as HTMLButtonElement
+    await waitFor(() => expect(again().disabled).toBe(true))
+    expect(format().disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Travar Ana neste time' }).getAttribute('aria-disabled')).toBe('true')
+    release()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Sortear de novo' })).toBeNull())
+  })
+
+  it('o bloqueio do sorteio some quando a chamada em lote termina', async () => {
+    const release = gated('/api/admin/game/paid-all')
+    // o jogo devolvido mantém o sorteio para podermos conferir o reabilitar
+    const f = fetch as unknown as ReturnType<typeof vi.fn>
+    const inner = f.getMockImplementation() as (p: string, init?: RequestInit) => Promise<Response>
+    f.mockImplementation(async (p: string, init?: RequestInit) => {
+      const res = await inner(p, init)
+      return p === '/api/admin/game/paid-all' ? respond(200, game) : res
+    })
+    await screen.findByLabelText('Pagou: Ana')
+    fireEvent.click(all())
+    const again = () => screen.getByRole('button', { name: 'Sortear de novo' }) as HTMLButtonElement
+    await waitFor(() => expect(again().disabled).toBe(true))
+    release()
+    await waitFor(() => expect(again().disabled).toBe(false))
+    expect(screen.getByRole('button', { name: 'Formato' })).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: 'Travar Ana neste time' }).getAttribute('aria-disabled')).toBe('false')
+  })
+})
+
 describe('estrutura', () => {
   it('logado, o único h1 é "Times" e "Elenco" é h2', async () => {
     setup(authed())

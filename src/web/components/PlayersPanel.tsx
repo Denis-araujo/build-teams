@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import type { Game, Player } from '../../shared/types'
 import { formatRating, StarRating } from './StarRating'
@@ -13,6 +13,10 @@ type Props = {
   onUnauthorized: () => void
   /** Rodapé do card (ex.: a configuração "Membro vê as estrelas"). */
   footer?: ReactNode
+  /** Avisa a página quando uma chamada em lote (marcar todos / limpar) começa ou termina. */
+  onBusyChange?(busy: boolean): void
+  /** O sorteio está salvando fora daqui: bloqueia as ações em lote. */
+  externalBusy?: boolean
 }
 
 const DEFAULT_RATING = 3
@@ -99,7 +103,7 @@ function PlayerRow(props: {
   )
 }
 
-export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized, onStale, footer }: Props) {
+export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized, onStale, footer, onBusyChange, externalBusy = false }: Props) {
   const [name, setName] = useState('')
   const [rating, setRating] = useState(DEFAULT_RATING)
   const [adding, setAdding] = useState(false)
@@ -108,6 +112,9 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
   const inFlight = useRef(new Set<string>())
   const [bulk, setBulk] = useState(false)
   const bulkBusy = useRef(false)
+  useEffect(() => {
+    onBusyChange?.(bulk)
+  }, [bulk, onBusyChange])
   // Guarda o id do jogo para a confirmação sumir se o jogo mudar ou desaparecer.
   const [confirmingFor, setConfirmingFor] = useState<string | null>(null)
   const confirmingClear = confirmingFor !== null && game?.id === confirmingFor
@@ -202,7 +209,7 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
   }
 
   async function setAll(paid: boolean, confirmed = false) {
-    if (bulkBusy.current || inFlight.current.size > 0) return
+    if (bulkBusy.current || externalBusy || inFlight.current.size > 0) return
     bulkBusy.current = true
     setBulk(true)
     setConfirmingFor(null)
@@ -305,9 +312,9 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
             <button
               type="button"
               className="btn btn-ghost text-[12px] px-2 py-1"
-              disabled={!game || bulk || pending.size > 0}
+              disabled={!game || bulk || externalBusy || pending.size > 0}
               ref={allBtn}
-              aria-busy={bulk || undefined}
+              aria-busy={bulk || externalBusy || undefined}
               title={game ? undefined : 'Cadastre a data do jogo primeiro'}
               onClick={() => void setAll(true)}
             >
@@ -317,8 +324,8 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
               ref={clearBtn}
               type="button"
               className="btn btn-ghost text-[12px] px-2 py-1"
-              disabled={!game || bulk || pending.size > 0}
-              aria-busy={bulk || undefined}
+              disabled={!game || bulk || externalBusy || pending.size > 0}
+              aria-busy={bulk || externalBusy || undefined}
               title={game ? undefined : 'Cadastre a data do jogo primeiro'}
               onClick={clearAll}
             >
@@ -358,7 +365,7 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={bulk || pending.size > 0}
+                disabled={bulk || externalBusy || pending.size > 0}
                 onClick={() => void setAll(false, true)}
               >
                 Limpar tudo

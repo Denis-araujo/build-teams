@@ -11,6 +11,9 @@ import LoginPage from './LoginPage'
 
 function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
   const data = useAdminData()
+  // Salvar o sorteio e as chamadas em lote não podem se sobrepor: respostas fora de ordem mostrariam um jogo velho.
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [drawBusy, setDrawBusy] = useState(false)
 
   useEffect(() => {
     if (data.status === 'unauthorized') onLoggedOut()
@@ -60,6 +63,8 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 onGameChange={data.setGame}
                 onUnauthorized={onLoggedOut}
                 onStale={() => void data.reload()}
+                onBusyChange={setBulkBusy}
+                externalBusy={drawBusy}
                 footer={
                   <SettingsToggle settings={data.settings} setSettings={data.setSettings} onUnauthorized={onLoggedOut} />
                 }
@@ -71,6 +76,8 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 onGameChange={data.setGame}
                 onUnauthorized={onLoggedOut}
                 onStale={() => void data.reload()}
+                onBusyChange={setDrawBusy}
+                externalBusy={bulkBusy}
               />
             </section>
           </>
