@@ -216,7 +216,7 @@ describe('MemberPage', () => {
     expect(card.textContent).toContain('Rafael')
     expect(card.textContent).toContain('1 jogador')
     expect(document.body.textContent).not.toContain('zzz')
-    expect(screen.queryByRole('heading', { name: 'Reservas' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /^Reservas/ })).toBeNull()
   })
 
   it('o único h1 é o título da seção "Times"; o cabeçalho é um span', async () => {

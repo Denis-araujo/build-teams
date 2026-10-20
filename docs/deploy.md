@@ -12,6 +12,12 @@ Para testar tudo (site, API e banco) antes de publicar:
 2. `npm run db:migrate:local` cria o banco D1 local (em `.wrangler/state`) e aplica as migrations.
 3. `npm run dev:pages` faz o build e sobe o site com a API em <http://localhost:8788>.
 
+O `.dev.vars` nunca é commitado (está no `.gitignore`); guarde nele só valores de teste.
+
+> **Atenção: banco local de uma versão anterior.** Se você já rodou as migrations de uma versão anterior, apague o banco local e migre de novo: `rm -rf .wrangler/state && npm run db:migrate:local` (depois reinicie o `npm run dev:pages`).
+>
+> Sintoma: todas as chamadas `/api` respondem 500 com "no such column: game_time" (o erro aparece no log do wrangler; a resposta da API é só "Erro interno"). Isso acontece porque a migration `0001` ganhou a coluna `games.game_time` e o banco local antigo não a tem.
+
 O `npm run dev` (Vite) continua existindo para mexer só no front; ele encaminha `/api` para a porta 8788, então deixe o `dev:pages` rodando junto.
 
 ## Publicação (rodada por você)

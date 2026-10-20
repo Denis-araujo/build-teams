@@ -43,6 +43,7 @@ describe('games', () => {
     const db = createTestDb()
     await expect(createGame(db, '2026-10-18', now)).rejects.toThrow(ValidationError)
     await expect(createGame(db, 'abc', now)).rejects.toThrow(ValidationError)
+    await expect(createGame(db, '2026-13-40', now)).rejects.toThrow('Data inválida')
   })
 
   it('defaults the time to 19:00 and stores an explicit one', async () => {
@@ -102,6 +103,7 @@ describe('games', () => {
     expect(g.date).toBe('2026-10-25')
     expect(g.paid).toEqual([a.id])
     await expect(updateGameDate(db, '2026-10-01', now)).rejects.toThrow(ValidationError)
+    await expect(updateGameDate(db, '25/10/2026', now)).rejects.toThrow('Data inválida')
   })
 
   it('update date without active game is not found', async () => {

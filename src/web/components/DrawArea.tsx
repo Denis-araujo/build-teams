@@ -332,6 +332,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
           {game && hasPlaced && (
             <CopyBar
               date={game.date}
+              time={game.time}
               teams={draw.teams.map((t) => t.flatMap((id) => playersById.get(id) ?? []))}
               reserves={draw.reserves.flatMap((id) => playersById.get(id) ?? [])}
             />

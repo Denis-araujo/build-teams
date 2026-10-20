@@ -25,9 +25,9 @@ export function Onboarding({ marked, total, hasGame, busy, onOpen }: Props) {
           As estrelas são distribuídas para os times ficarem o mais parelhos possível. Quem passar das vagas vira reserva.
         </span>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
+      <ol className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3 p-0">
         {steps.map((s) => (
-          <div key={s.n} className="flex flex-col gap-2 rounded-md bg-bg p-[14px]">
+          <li key={s.n} className="flex flex-col gap-2 rounded-md bg-bg p-[14px]">
             <span
               className={`flex size-[26px] items-center justify-center rounded-full text-[13px] font-medium ${
                 s.done ? 'bg-navy text-navy-ink' : 'bg-surface text-neutral-400'
@@ -37,9 +37,9 @@ export function Onboarding({ marked, total, hasGame, busy, onOpen }: Props) {
             </span>
             <span className="text-[14px] font-medium">{s.title}</span>
             <span className="text-[13px] text-neutral-400 text-pretty">{s.body}</span>
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
       <div className="flex flex-col items-start gap-2">
         <button
           type="button"

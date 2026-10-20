@@ -44,6 +44,18 @@ function setup(initial: Game | null, put: (init: RequestInit) => Promise<Respons
 const sent = (f: ReturnType<typeof vi.fn>, i = 0) => JSON.parse((f.mock.calls[i][1] as RequestInit).body as string) as DrawState
 const open = () => fireEvent.click(screen.getByRole('button', { name: 'Montar times' }))
 
+describe('copiar escalação', () => {
+  it('o texto copiado traz a hora do jogo', async () => {
+    const writeText = vi.fn(async () => {})
+    const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['a', 'b'], ['c']], reserves: [], locks: {} }
+    setup({ ...GAME(['a', 'b', 'c'], draw), time: '20:30' }, () => respond(500))
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar escalação' }))
+    await screen.findByRole('button', { name: 'Copiado ✓' })
+    expect((writeText.mock.calls[0] as unknown[])[0]).toContain(' às 20:30')
+  })
+})
+
 describe('estados iniciais', () => {
   it('sem sorteio: onboarding de três passos; cabeçalho só com o título (sem chip nem botões)', () => {
     setup(GAME(['a', 'b']), () => respond(500))

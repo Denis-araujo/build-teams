@@ -83,9 +83,9 @@ Rodada 1 = commit `fix: ajustes de fidelidade visual ao v4 (rodada 1)`. Depois d
 | Reservas com nota | "Bruno ★ 3" | "Bruno" | `★ {nota}` 12px gold-ink, só com estrelas | 1 |
 | Nota de 26px no Elenco | presente | ausente | `w-[26px] text-[13px] font-medium text-gold-ink` | 1 |
 | Ordem do Elenco | quem joga primeiro, depois por nota | alfabética | ordem do v4 (estável; sem estrelas: só quem joga primeiro) | 1 |
-| Chip "2 times × 6" ao lado de "Times" | presente | ausente | **OPEN** (ver abaixo) | — |
-| Linha "fora" (jogador não pago) | 11px uppercase, linha com opacidade 0,5 | idem, mesma posição | sem diferença | — |
-| **Sem estrelas**: aside "Elenco" | não aparece (`memberRoster` exige `showStars`); os times ocupam 1384px em 5 colunas de 264px | aparece (nomes + "fora"); times em 976px, 315px por card | **OPEN / decisão** (ver abaixo) | — |
+| Chip "2 times × 6" ao lado de "Times" | presente | ausente | **DECIDIDO** (Task 16): a API pública expõe `teamCount`/`teamSize` e o Membro mostra "N times × M" | 16 |
+| Linha "fora" (jogador não pago) | 11px uppercase, linha com opacidade 0,5 | mesma posição; "fora" em neutral-400 (≈ 9,2:1) e fora da opacidade da linha | **DECIDIDO** (Task 16): contraste corrigido de propósito | 16 |
+| **Sem estrelas**: aside "Elenco" | não aparece (`memberRoster` exige `showStars`); os times ocupam 1384px em 5 colunas de 264px | aparece (nomes + "fora"); times em 976px, 315px por card | **DECIDIDO** (Task 16): o "Elenco" continua visível, com as estrelas ocultas | 16 |
 | Sem estrelas: ordem dentro dos times e das reservas | por nota | alfabética | intencional (o servidor ordena por nome para não vazar a força; está testado) | — |
 
 ## (8) Membro sem elenco (ilustração)
@@ -108,11 +108,11 @@ Rodada 1 = commit `fix: ajustes de fidelidade visual ao v4 (rodada 1)`. Depois d
 - Altura medida do cabeçalho: **73,4px** nos dois lados, com a linha do jogo (14 + 14 + 43,4 da coluna de texto + 1 de borda). A nota "~66px" do brief não confere com a renderização, mas o app acompanha o protótipo, inclusive no `calc(100vh - 66px)` do login e do Membro sem elenco.
 - 390px: nenhum estado tem rolagem horizontal (`scrollWidth` = 390 em todos). As quebras de linha do cabeçalho, do cartão do jogo, de "Times" e dos botões ficam iguais.
 
-## OPEN
+## Decididas pelo organizador (Task 16)
 
-1. **Chip "N times × M" no Membro.** A resposta pública não traz `teamSize`, e o teste `does not expose draw internals` (`tests/server/publicGame.test.ts`) proíbe expor `teamSize`. Para mostrar o chip é preciso decidir se `teamSize` pode ser público, ou aceitar um valor derivado (o tamanho do maior time, que erra quando faltam jogadores).
-2. **Elenco do Membro com estrelas ocultas.** O v4 esconde o aside "Elenco" inteiro quando o Membro não vê estrelas. Fazer igual tiraria do Membro a lista de quem está "fora" (decisão 2 da spec), e os testes do `MemberPage` exigem essa lista com `showStars: false`. Mantive o aside: decisão para o organizador.
-3. **Contraste do "fora".** O "fora" é 11px neutral-500 (#595d6c) numa linha com opacidade 0,5. É idêntico ao v4, mas o contraste fica baixo (cerca de 2,2:1). Mantido por fidelidade; vale reavaliar.
+1. **Chip "N times × M" no Membro.** Decidido: a resposta pública passa a expor `teamCount` e `teamSize`, e o Membro mostra "N times × M" ao lado de "Times".
+2. **Elenco do Membro com estrelas ocultas.** Decidido: o aside "Elenco" continua visível sem estrelas (mantém a lista de quem está "fora", decisão 2 da spec), diferente do v4.
+3. **Contraste do "fora".** Decidido: o "fora" foi escurecido para neutral-400 (cerca de 9,2:1, antes 2,2:1) e deixou de receber a opacidade da linha. Diferença intencional em relação ao v4.
 
 ## O que o app faz diferente de propósito (decisões da spec)
 

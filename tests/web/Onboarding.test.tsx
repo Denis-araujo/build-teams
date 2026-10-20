@@ -24,6 +24,15 @@ describe('Onboarding', () => {
     expect(screen.getByText('Ajuste à mão arrastando e trave quem não pode mudar.')).toBeTruthy()
   })
 
+  it('os 3 passos são itens de uma lista ordenada', () => {
+    render(<Onboarding {...base} onOpen={() => {}} />)
+    const items = screen.getAllByRole('listitem')
+    expect(items).toHaveLength(3)
+    expect(items.every((li) => li.parentElement?.tagName === 'OL')).toBe(true)
+    expect(items[0].textContent).toContain('Convoque')
+    expect(items[2].textContent).toContain('Sorteie')
+  })
+
   it('passo 1 concluído com 2 marcados (bolinha navy); com 1 não', () => {
     const { rerender } = render(<Onboarding {...base} onOpen={() => {}} />)
     expect(dot('1').className).toContain('bg-navy')

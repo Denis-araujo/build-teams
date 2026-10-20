@@ -39,10 +39,6 @@ export function isValidCalendarDate(value: string): boolean {
   )
 }
 
-export function isGameDateAllowed(gameDate: string, now: Date): boolean {
-  return isValidCalendarDate(gameDate) && gameDate >= todayInBrasilia(now)
-}
-
 // O momento do jogo (data + hora, horário de Brasília) não pode ser anterior ao minuto atual.
 // Compara a hora de parede de Brasília (via Intl), sem assumir deslocamento fixo.
 export function isGameMomentAllowed(date: string, time: string, now: Date): boolean {

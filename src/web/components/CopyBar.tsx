@@ -5,9 +5,9 @@ import { buildWhatsAppText } from '../../shared/whatsapp'
 const COPY_ICON =
   'M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208V208Z'
 
-type Props = { date: string; teams: Player[][]; reserves: Player[] }
+type Props = { date: string; time?: string; teams: Player[][]; reserves: Player[] }
 
-export function CopyBar({ date, teams, reserves }: Props) {
+export function CopyBar({ date, time, teams, reserves }: Props) {
   const [includeStars, setIncludeStars] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showFallback, setShowFallback] = useState(false)
@@ -22,7 +22,7 @@ export function CopyBar({ date, teams, reserves }: Props) {
     }
   }, [])
 
-  const text = () => buildWhatsAppText({ date, teams, reserves, includeStars })
+  const text = () => buildWhatsAppText({ date, time, teams, reserves, includeStars })
 
   async function copy() {
     const value = text()

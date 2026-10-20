@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isGameDateAllowed,
   isGameExpired,
   isGameMomentAllowed,
   isValidGameTime,
@@ -22,22 +21,6 @@ describe('isGameExpired', () => {
   })
   it('expira após a meia-noite em Brasília', () => {
     expect(isGameExpired('2026-10-19', new Date('2026-10-20T03:00:00Z'))).toBe(true)
-  })
-})
-
-describe('isGameDateAllowed', () => {
-  const now = new Date('2026-10-19T15:00:00Z') // 12:00 em Brasília
-  it('aceita hoje', () => {
-    expect(isGameDateAllowed('2026-10-19', now)).toBe(true)
-  })
-  it('rejeita passado', () => {
-    expect(isGameDateAllowed('2026-10-18', now)).toBe(false)
-  })
-  it('rejeita formato inválido', () => {
-    expect(isGameDateAllowed('19/10/2026', now)).toBe(false)
-  })
-  it('rejeita data inexistente', () => {
-    expect(isGameDateAllowed('2026-13-40', now)).toBe(false)
   })
 })
 
@@ -80,6 +63,8 @@ describe('isGameMomentAllowed', () => {
   })
   it('rejeita data ou hora malformadas', () => {
     expect(isGameMomentAllowed('abc', '19:00', at1900)).toBe(false)
+    expect(isGameMomentAllowed('19/10/2026', '19:00', at1900)).toBe(false)
+    expect(isGameMomentAllowed('2026-13-40', '19:00', at1900)).toBe(false)
     expect(isGameMomentAllowed('2026-10-20', '25:00', at1900)).toBe(false)
   })
 })

@@ -18,8 +18,8 @@ const WITH =
   '🏐 *Escalação · Vôlei*\nSábado, 24/10 · 3 jogadores\n\n*Time A*\n1. Ana ★4,5\n2. Bia ★3\n\n*Time B*\n1. Cris ★2\n\nReservas: Duda'
 const WITHOUT = '🏐 *Escalação · Vôlei*\nSábado, 24/10 · 3 jogadores\n\n*Time A*\n1. Ana\n2. Bia\n\n*Time B*\n1. Cris\n\nReservas: Duda'
 
-function mount() {
-  render(<CopyBar date="2026-10-24" teams={teams} reserves={reserves} />)
+function mount(time?: string) {
+  render(<CopyBar date="2026-10-24" time={time} teams={teams} reserves={reserves} />)
 }
 const findArea = () => waitFor(() => {
   const el = document.querySelector('textarea')
@@ -37,6 +37,23 @@ describe('CopyBar', () => {
     fireEvent.click(copyBtn())
     await screen.findByRole('button', { name: 'Copiado ✓' })
     expect(writeText).toHaveBeenCalledWith(WITHOUT)
+  })
+
+  it('com hora, a linha do dia traz " às 19:00"; sem hora, fica como antes', async () => {
+    const writeText = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    mount('19:00')
+    fireEvent.click(copyBtn())
+    await screen.findByRole('button', { name: 'Copiado ✓' })
+    const text = (writeText.mock.calls[0] as unknown[])[0] as string
+    expect(text.split('\n')[1]).toBe('Sábado, 24/10 às 19:00 · 3 jogadores')
+    cleanup()
+    const again = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { clipboard: { writeText: again } })
+    mount()
+    fireEvent.click(copyBtn())
+    await screen.findByRole('button', { name: 'Copiado ✓' })
+    expect(again).toHaveBeenCalledWith(WITHOUT)
   })
 
   it('com estrelas inclui ★4,5', async () => {
