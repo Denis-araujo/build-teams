@@ -4,6 +4,19 @@ Guia para publicar o Montar Times no Cloudflare Pages (site + API) com banco D1.
 
 Pré-requisitos: Node instalado, dependências instaladas (`npm install`) e uma conta gratuita em <https://dash.cloudflare.com/sign-up>.
 
+## Situação atual
+
+O app está publicado em **<https://montar-times.pages.dev>**: o mesmo projeto do Cloudflare Pages serve o site (`/` para o Membro e `/admin` para o administrador) e a API (`/api/*`), ligados ao banco D1 `montar-times`. Não é preciso um segundo provedor para o front (por exemplo a Vercel): o limite de tentativas de senha usa o IP real do visitante justamente porque não há proxy no meio.
+
+O que já foi feito (passos 1 a 7 abaixo) e conferido pela internet com `curl`: `/api/game` responde `null`, rota de administrador sem login responde 401, login com senha errada responde 401 e com a senha certa responde 200 com cookie `HttpOnly; Secure; SameSite=Strict`, e `/` e `/admin` devolvem a página do app. O passo 5 (vínculo do banco pelo `wrangler.toml`) funcionou sem precisar do painel.
+
+Para publicar uma nova versão do app (as migrations só precisam rodar quando houver uma nova):
+
+```bash
+npm test && npm run build
+npx wrangler pages deploy dist --project-name montar-times --branch main
+```
+
 ## Rodando localmente
 
 Para testar tudo (site, API e banco) antes de publicar:
@@ -36,7 +49,9 @@ Abre o navegador para autorizar o wrangler na sua conta.
 npx wrangler d1 create montar-times
 ```
 
-O comando imprime um `database_id`. Copie-o para `wrangler.toml`, no lugar de `REPLACE_WITH_ID_FROM_wrangler_d1_create`.
+O comando imprime um `database_id`. Copie-o para `wrangler.toml`, no lugar de `REPLACE_WITH_ID_FROM_wrangler_d1_create`. O id só identifica o banco (não dá acesso a ele), então pode ficar no repositório.
+
+Atenção ao nome do binding: o comando sugere `binding = "montar_times"`, mas o código espera `DB`. Mantenha `binding = "DB"` no `wrangler.toml`.
 
 ### 3. Aplicar as migrations no banco remoto
 
@@ -52,9 +67,9 @@ npx wrangler pages project create montar-times --production-branch main
 
 ### 5. Ligar o D1 ao projeto Pages
 
-Como o `wrangler.toml` tem `pages_build_output_dir`, o wrangler o trata como configuração do projeto Pages, e o bloco `[[d1_databases]]` (binding `DB`) deveria ser aplicado no deploy. **Não verificado numa conta real**: só foi testado localmente.
+Como o `wrangler.toml` tem `pages_build_output_dir`, o wrangler o trata como configuração do projeto Pages, e o bloco `[[d1_databases]]` (binding `DB`) é aplicado no deploy. **Verificado numa conta real**: depois do primeiro deploy, `/api/game` respondeu `null` (200), ou seja, a API conseguiu consultar o banco, sem criar o binding pelo painel.
 
-Plano B (documentado): se o `/api/game` responder 500 com "DB" undefined/no such table, primeiro confira que o `database_id` no `wrangler.toml` é o id real impresso por `d1 create` (não o valor de exemplo) e refaça o deploy (passo 6). Com `pages_build_output_dir`, o `wrangler.toml` é a fonte da verdade, então um id errado ali é a causa mais provável. Só como último recurso, crie o binding no painel: projeto Pages `montar-times` > Settings > Functions > D1 database bindings > Add binding, com variável `DB` e banco `montar-times`, para o ambiente Production, e refaça o deploy. Atenção: quando o projeto é gerenciado pelo `wrangler.toml`, o painel pode mostrar os bindings como somente leitura ou ignorá-los em favor do arquivo.
+Plano B, só se algo disso falhar: se o `/api/game` responder 500 com "DB" undefined/no such table, primeiro confira que o `database_id` no `wrangler.toml` é o id real impresso por `d1 create` (não o valor de exemplo) e refaça o deploy (passo 6). Com `pages_build_output_dir`, o `wrangler.toml` é a fonte da verdade, então um id errado ali é a causa mais provável. Só como último recurso, crie o binding no painel: projeto Pages `montar-times` > Settings > Functions > D1 database bindings > Add binding, com variável `DB` e banco `montar-times`, para o ambiente Production, e refaça o deploy. Atenção: quando o projeto é gerenciado pelo `wrangler.toml`, o painel pode mostrar os bindings como somente leitura ou ignorá-los em favor do arquivo.
 
 ### 6. Build e primeiro deploy
 
@@ -65,7 +80,7 @@ npx wrangler pages deploy dist --project-name montar-times --branch main
 
 O comando imprime a URL (`https://montar-times.pages.dev` ou parecida). `--branch main` garante que seja o deploy de produção.
 
-Neste ponto os segredos ainda não existem, então `/api/admin/login` responde 503 "Servidor sem senha configurada". Isso é o esperado.
+Neste ponto os segredos ainda não existem, então `/api/admin/login` responde 503 "Servidor sem senha configurada". Isso é o esperado. (Se o endereço do deploy específico, algo como `https://d97ac84d.montar-times.pages.dev`, ainda não abrir, espere alguns minutos: o DNS demora a propagar; o endereço principal `montar-times.pages.dev` funciona antes.)
 
 ### 7. Definir os segredos
 
