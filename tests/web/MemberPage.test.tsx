@@ -96,8 +96,9 @@ describe('MemberPage', () => {
     expect(screen.getByText('Bruno')).toBeTruthy()
     expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '1 de 2 jogadores')).toBeTruthy()
     expect(screen.getAllByText('fora')).toHaveLength(1)
-    expect(screen.getByText('Bruno').closest('li')!.className).toContain('opacity-50')
-    expect(screen.getByText('Rafael').closest('li')!.className).not.toContain('opacity-50')
+    expect(screen.getByText('Bruno').className).toContain('opacity-50')
+    expect(screen.getByText('Rafael').className).not.toContain('opacity-50')
+    expect(screen.getByText('Bruno').closest('li')!.className).not.toContain('opacity-50')
     expect(screen.queryByText('Pago')).toBeNull()
     expect(screen.queryByText('Aguardando')).toBeNull()
   })
@@ -142,6 +143,47 @@ describe('MemberPage', () => {
     expect(reserves.textContent).toContain('Caio')
     expect(document.body.textContent).not.toMatch(/p[123]/)
     expect(screen.queryByText('Os times ainda não foram sorteados')).toBeNull()
+  })
+
+  it('o rótulo "fora" não é atenuado e usa o neutro mais escuro (contraste >= 4,5:1)', async () => {
+    setup(game())
+    const fora = await screen.findByText('fora')
+    expect(fora.closest('.opacity-50')).toBeNull()
+    expect(fora.className).toContain('text-neutral-400')
+    expect(fora.className).not.toContain('text-neutral-500')
+    expect(fora.className).toContain('text-[11px]')
+    expect(fora.className).toContain('uppercase')
+    expect(fora.className).toContain('tracking-[0.04em]')
+  })
+
+  describe('chip do formato', () => {
+    const drawn = {
+      players: [
+        { id: 'p1', name: 'Rafael', paid: true },
+        { id: 'p2', name: 'Bruno', paid: true },
+      ],
+      teams: [['p1'], ['p2']],
+    }
+
+    it('mostra "N times × M" quando há times e o formato', async () => {
+      setup(game({ ...drawn, teamCount: 2, teamSize: 6 }))
+      const chip = await screen.findByText('2 times × 6')
+      expect(chip.tagName).toBe('SPAN')
+      expect(chip.className).toContain('rounded-full')
+      expect(chip.className).toContain('tabular-nums')
+    })
+
+    it('some sem times, mesmo com o formato na resposta', async () => {
+      setup(game({ teamCount: 2, teamSize: 6 }))
+      await screen.findByText('Os times ainda não foram sorteados')
+      expect(screen.queryByText(/times ×/)).toBeNull()
+    })
+
+    it('some quando a API omite o formato', async () => {
+      setup(game(drawn))
+      await screen.findByRole('heading', { name: 'Time A' })
+      expect(screen.queryByText(/times ×/)).toBeNull()
+    })
   })
 
   it('nomes repetidos: cada card mostra as próprias estrelas', async () => {

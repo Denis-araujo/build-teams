@@ -109,9 +109,34 @@ describe('getPublicGame', () => {
   it('does not expose draw internals', async () => {
     const { db } = await setup()
     const json = JSON.stringify(await getPublicGame(db, created))
-    for (const k of ['locks', 'teamCount', 'teamSize', 'revision', 'draw_json']) {
+    for (const k of ['locks', 'revision', 'draw_json']) {
       expect(json).not.toContain(k)
     }
+    expect(Object.keys(JSON.parse(json)).sort()).toEqual(
+      ['date', 'players', 'reserves', 'showStars', 'teamCount', 'teamSize', 'teams', 'time'],
+    )
+  })
+
+  it('exposes the stored draw format when a draw exists', async () => {
+    const { db } = await setup()
+    const result = await getPublicGame(db, created)
+    expect(result?.teamCount).toBe(2)
+    expect(result?.teamSize).toBe(1)
+  })
+
+  it('omits teamCount and teamSize when there is no draw', async () => {
+    const { db } = await setup(false)
+    const result = await getPublicGame(db, created)
+    expect('teamCount' in result!).toBe(false)
+    expect('teamSize' in result!).toBe(false)
+  })
+
+  it('still has no rating anywhere with stars hidden and a draw (format is public)', async () => {
+    const { db } = await setup()
+    await setSetting(db, 'member_sees_stars', false)
+    const result = await getPublicGame(db, created)
+    expect(result?.teamCount).toBe(2)
+    expect(JSON.stringify(result)).not.toContain('rating')
   })
 
   describe('ordering inside teams', () => {

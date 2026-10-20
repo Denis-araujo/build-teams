@@ -15,6 +15,8 @@ export type PublicGame = {
   players: { id: string; name: string; paid: boolean; rating?: number }[];
   teams: string[][];
   reserves: string[];
+  teamCount?: number;
+  teamSize?: number;
 };
 
 export type Game = { id: string; date: string; time: string; paid: string[]; draw: DrawState | null };

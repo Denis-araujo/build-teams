@@ -29,23 +29,26 @@ function Roster({ game }: { game: PublicGame }) {
         <span className="text-[13px] text-neutral-400">{game.players.filter((p) => p.paid).length} de {game.players.length} jogadores</span>
       </div>
       <ul className="m-0 flex list-none flex-col px-2 pb-2">
-        {rows.map((p) => (
+        {rows.map((p) => {
+          // v4: a linha de quem está fora fica a 50%, mas o rótulo "fora" não (contraste).
+          const dim = p.paid ? '' : 'opacity-50'
+          return (
           <li
             key={p.id}
-            className={`flex items-center gap-[10px] border-t border-neutral-900 px-[10px] py-2 ${p.paid ? '' : 'opacity-50'}`}
+            className="flex items-center gap-[10px] border-t border-neutral-900 px-[10px] py-2"
           >
-            <span className="min-w-0 flex-1 text-[14px]">{p.name}</span>
-            {!p.paid && <span className="text-[11px] tracking-[0.04em] uppercase text-neutral-500">fora</span>}
+            <span className={`min-w-0 flex-1 text-[14px] ${dim}`}>{p.name}</span>
+            {!p.paid && <span className="text-[11px] tracking-[0.04em] uppercase text-neutral-400">fora</span>}
             {p.rating !== undefined && (
-              <>
+              <span className={`flex items-center gap-[10px] ${dim}`}>
                 <StarRating value={p.rating} size={15} />
                 <span className="w-[26px] text-right text-[13px] font-medium text-gold-ink tabular-nums" aria-hidden="true">
                   {formatRating(p.rating)}
                 </span>
-              </>
+              </span>
             )}
           </li>
-        ))}
+        )})}
       </ul>
     </section>
   )
@@ -175,7 +178,14 @@ export default function MemberPage() {
           <>
             <div className="flex min-w-0 flex-[3_1_520px] flex-col gap-5">
               <GameCard game={game} />
-              <h1 className="m-0 text-[32px] font-medium tracking-[-0.02em]">Times</h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="m-0 text-[32px] font-medium tracking-[-0.02em]">Times</h1>
+                {hasTeams && game.teamCount !== undefined && game.teamSize !== undefined && (
+                  <span className="rounded-full bg-surface px-[10px] py-1 text-[13px] text-neutral-400 shadow-sm tabular-nums">
+                    {game.teamCount} times × {game.teamSize}
+                  </span>
+                )}
+              </div>
               {hasTeams && game.showStars && <BalanceCard teams={game.teams} ratingById={ratingById} />}
               {!hasTeams && (
                 <div className="flex flex-col items-start gap-[14px] rounded-lg bg-surface px-[28px] py-[40px] shadow-sm">

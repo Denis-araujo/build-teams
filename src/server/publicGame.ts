@@ -4,7 +4,7 @@ import { getActiveGame, getSetting } from './games'
 import { listPlayers } from './players'
 
 // Única fonte de dados da página pública (sem login). Monta cada jogador sem a
-// chave `rating` quando as estrelas estão ocultas; nada de travas, revisão ou config.
+// chave `rating` quando as estrelas estão ocultas; nada de travas, revisão ou config (só o formato N×M).
 export async function getPublicGame(db: D1Database, now: Date): Promise<PublicGame | null> {
   await finalizeIfExpired(db, now)
   const game = await getActiveGame(db)
@@ -33,5 +33,8 @@ export async function getPublicGame(db: D1Database, now: Date): Promise<PublicGa
   const teams = showStars ? storedTeams : storedTeams.map((t) => [...t].sort(byName))
   const reserves = showStars ? storedReserves : [...storedReserves].sort(byName)
 
-  return { date: game.date, time: game.time, showStars, players, teams, reserves }
+  // O formato do sorteio (N times de M) não revela força nenhuma; só vai junto quando há sorteio.
+  const format = game.draw ? { teamCount: game.draw.teamCount, teamSize: game.draw.teamSize } : {}
+
+  return { date: game.date, time: game.time, showStars, players, teams, reserves, ...format }
 }
