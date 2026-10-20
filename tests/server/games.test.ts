@@ -10,6 +10,7 @@ import {
   getSetting,
   isUniqueViolation,
   saveDraw,
+  saveGameState,
   setAllPaid,
   setPaid,
   setSetting,
@@ -472,5 +473,59 @@ describe('games', () => {
     expect(await getActiveGame(db)).toMatchObject({ id: game.id, draw: null })
     await db.prepare('UPDATE games SET draw_json = ? WHERE id = ?').bind('{"teams":1}', game.id).run()
     expect((await getActiveGame(db))?.draw).toBeNull()
+  })
+})
+
+describe('saveGameState', () => {
+  const state = (teams: string[][], reserves: string[] = [], locks: Record<string, number> = {}): DrawState => ({
+    teamCount: 2,
+    teamSize: 2,
+    teams,
+    reserves,
+    locks,
+  })
+
+  it('grava pagamentos e sorteio de uma vez e devolve o jogo salvo', async () => {
+    const { db, a, b, c } = await setup()
+    const draw = state([[a.id, b.id], []], [c.id], { [a.id]: 0 })
+    const g = await saveGameState(db, [a.id, b.id, c.id], draw)
+    expect([...g.paid].sort()).toEqual([a.id, b.id, c.id].sort())
+    expect(g.draw).toEqual(draw)
+    expect(await getActiveGame(db)).toEqual(g)
+  })
+
+  it('substitui os pagamentos anteriores e aceita sorteio nulo', async () => {
+    const { db, a, b } = await setup()
+    await saveGameState(db, [a.id, b.id], state([[a.id], [b.id]]))
+    const g = await saveGameState(db, [b.id], null)
+    expect(g.paid).toEqual([b.id])
+    expect(g.draw).toBeNull()
+  })
+
+  it('ids repetidos em paid não quebram', async () => {
+    const { db, a } = await setup()
+    const g = await saveGameState(db, [a.id, a.id], null)
+    expect(g.paid).toEqual([a.id])
+  })
+
+  it('sorteio com jogador fora de paid é recusado e nada muda', async () => {
+    const { db, a, b } = await setup()
+    await saveGameState(db, [a.id], state([[a.id], []]))
+    await expect(saveGameState(db, [a.id], state([[a.id], [b.id]]))).rejects.toThrow(ValidationError)
+    const g = (await getActiveGame(db))!
+    expect(g.paid).toEqual([a.id])
+    expect(g.draw).toEqual(state([[a.id], []]))
+  })
+
+  it('jogador desconhecido ou arquivado em paid é recusado', async () => {
+    const { db, a, b } = await setup()
+    await expect(saveGameState(db, ['nope'], null)).rejects.toThrow(ValidationError)
+    await archivePlayer(db, b.id)
+    await expect(saveGameState(db, [a.id, b.id], null)).rejects.toThrow(ValidationError)
+    expect((await getActiveGame(db))!.paid).toEqual([])
+  })
+
+  it('sem jogo ativo é not found', async () => {
+    await expect(saveGameState(createTestDb(), [], null)).rejects.toThrow(NotFoundError)
   })
 })

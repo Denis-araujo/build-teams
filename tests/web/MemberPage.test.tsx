@@ -44,6 +44,33 @@ afterEach(() => {
 })
 
 describe('MemberPage', () => {
+  it('enquanto carrega mostra só o loading; jogo e jogadores entram juntos quando a resposta chega', async () => {
+    let release!: (r: Response) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((res) => (release = res))))
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('status').textContent).toBe('Carregando a escalação…')
+    expect(screen.queryByText('Nenhum jogo marcado')).toBeNull()
+    expect(screen.queryByText('Sem jogo marcado')).toBeNull()
+    expect(screen.queryByText('Elenco')).toBeNull()
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Times'])
+
+    await act(async () => release(respond(game())))
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByText('Elenco')).toBeTruthy()
+    expect(screen.getByText('Rafael')).toBeTruthy()
+  })
+
+  it('sem jogo: o loading some e aparece "Nenhum jogo marcado"', async () => {
+    setup(null)
+    expect(screen.getByRole('status')).toBeTruthy()
+    expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('mostra "Nenhum jogo marcado" quando não há jogo', async () => {
     setup(null)
     expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { bootstrapFromLegacy } from '../helpers/bootstrapShim'
 import App from '../../src/web/App'
 import type { Game, Player } from '../../src/shared/types'
 
@@ -19,6 +20,10 @@ const GAME: Game = { id: 'g1', date: '2026-10-24', time: '19:00', paid: [], draw
 function setup(routes: Routes) {
   const fetchMock = vi.fn(async (path: string, init: RequestInit = {}) => {
     const key = `${init.method ?? 'GET'} ${path}`
+    if (key === 'GET /api/admin/bootstrap') {
+      const out = await bootstrapFromLegacy(routes, init)
+      return respond(out.status, out.body)
+    }
     const r = routes[key]
     if (!r) return respond(404, { error: `sem rota ${key}` })
     const out = await (typeof r === 'function' ? r(init) : r)
@@ -179,34 +184,39 @@ describe('lista', () => {
 })
 
 describe('pagamentos', () => {
-  it('mostra "0 de 2 jogadores" e atualiza pelo jogo RETORNADO', async () => {
-    const f = setup(
-      authed({
-        // servidor devolve um estado diferente do que o clique sugere: vale o retornado
-        'PUT /api/admin/game/paid': { status: 200, body: { ...GAME, paid: ['p1', 'p2'] } },
-      }),
-    )
+  const anyPut = (f: ReturnType<typeof vi.fn>) =>
+    f.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === 'PUT')
+
+  it('marcar atualiza o contador na hora e não faz requisição', async () => {
+    const f = setup(authed())
     const box = await pagou('Ana')
     expect(counter('0 de 2 jogadores')).toBeTruthy()
     fireEvent.click(box)
-    expect(await counterAsync('2 de 2 jogadores')).toBeTruthy()
-    expect(body(calls(f, 'PUT /api/admin/game/paid')[0])).toBe('{"playerId":"p1","paid":true}')
-    expect((await pagou('Bia')).checked).toBe(true)
+    expect(counter('1 de 2 jogadores')).toBeTruthy()
+    expect((await pagou('Ana')).checked).toBe(true)
+    fireEvent.click(await pagou('Bia'))
+    expect(counter('2 de 2 jogadores')).toBeTruthy()
+    expect(anyPut(f)).toHaveLength(0)
   })
 
-  it('desmarcar envia paid:false', async () => {
-    const f = setup(
-      authed({
-        'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1'] } },
-        'PUT /api/admin/game/paid': { status: 200, body: GAME },
-      }),
-    )
+  it('desmarcar atualiza o contador na hora e não faz requisição', async () => {
+    const f = setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1'] } } }))
     const box = await pagou('Ana')
     expect(box.checked).toBe(true)
     expect(counter('1 de 2 jogadores')).toBeTruthy()
     fireEvent.click(box)
-    expect(await counterAsync('0 de 2 jogadores')).toBeTruthy()
-    expect(body(calls(f, 'PUT /api/admin/game/paid')[0])).toBe('{"playerId":"p1","paid":false}')
+    expect(counter('0 de 2 jogadores')).toBeTruthy()
+    expect(anyPut(f)).toHaveLength(0)
+  })
+
+  it('desmarcar quem está no sorteio tira a pessoa do time, só na tela', async () => {
+    const draw = { teamCount: 2, teamSize: 1, teams: [['p1'], ['p2']], reserves: [], locks: { p1: 0 } }
+    const f = setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1', 'p2'], draw } } }))
+    fireEvent.click(await pagou('Ana'))
+    expect(screen.queryByRole('button', { name: 'Travar Ana neste time' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Destravar Ana' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Travar Bia neste time' })).toBeTruthy()
+    expect(anyPut(f)).toHaveLength(0)
   })
 
   it('sem jogo ativo as caixas ficam desabilitadas, com explicação', async () => {
@@ -216,53 +226,9 @@ describe('pagamentos', () => {
     expect(box.title).toBe('Cadastre a data do jogo primeiro')
     expect(counter('0 de 2 jogadores')).toBeTruthy()
   })
-
-  it('dois cliques rápidos na mesma caixa não enviam requisições sobrepostas', async () => {
-    let release: (o: Out) => void = () => {}
-    const f = setup(
-      authed({
-        'PUT /api/admin/game/paid': () => new Promise<Out>((r) => (release = r)),
-      }),
-    )
-    const box = await pagou('Ana')
-    fireEvent.click(box)
-    fireEvent.click(box)
-    expect(box.disabled).toBe(true)
-    expect(calls(f, 'PUT /api/admin/game/paid')).toHaveLength(1)
-    release({ status: 200, body: { ...GAME, paid: ['p1'] } })
-    await waitFor(() => expect(box.checked).toBe(true))
-    expect(box.disabled).toBe(false)
-  })
-
-  it.each([500])('falha %i mantém a caixa como estava e mostra alerta', async (status) => {
-    setup(authed({ 'PUT /api/admin/game/paid': { status, body: { error: 'x' } } }))
-    const box = await pagou('Ana')
-    fireEvent.click(box)
-    expect((await screen.findByRole('alert')).textContent).toMatch(/pagamento/i)
-    expect(box.checked).toBe(false)
-    expect(box.disabled).toBe(false)
-    expect(counter('0 de 2 jogadores')).toBeTruthy()
-  })
-})
-
-describe('jogo finalizado em outra aba', () => {
-  it('404 ao pagar recarrega os dados e avisa que o jogo mudou', async () => {
-    const f = setup(authed({ 'PUT /api/admin/game/paid': { status: 404, body: { error: 'Não há jogo ativo' } } }))
-    const box = await pagou('Ana')
-    expect(calls(f, 'GET /api/admin/game')).toHaveLength(1)
-    fireEvent.click(box)
-    expect((await screen.findByRole('alert')).textContent).toBe('O jogo mudou. A página foi atualizada.')
-    await waitFor(() => expect(calls(f, 'GET /api/admin/game')).toHaveLength(2))
-  })
 })
 
 describe('sessão', () => {
-  it('401 em uma chamada volta ao login', async () => {
-    setup(authed({ 'PUT /api/admin/game/paid': { status: 401 } }))
-    fireEvent.click(await pagou('Ana'))
-    expect(await screen.findByLabelText('Senha')).toBeTruthy()
-  })
-
   it('401 ao carregar jogadores volta ao login', async () => {
     setup(authed({ 'GET /api/admin/players': { status: 401 } }))
     expect(await screen.findByLabelText('Senha')).toBeTruthy()
@@ -402,112 +368,81 @@ describe('Marcar todos / Limpar', () => {
   const DRAW = { teamCount: 2, teamSize: 1, teams: [['p1'], ['p2']], reserves: [], locks: {} }
   const all = () => screen.getByRole('button', { name: 'Marcar todos' }) as HTMLButtonElement
   const none = () => screen.getByRole('button', { name: 'Limpar' }) as HTMLButtonElement
+  const anyPut = (f: ReturnType<typeof vi.fn>) =>
+    f.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === 'PUT')
 
-  it('Marcar todos envia {"paid":true} e o contador vem do Game retornado', async () => {
-    const f = setup(authed({ 'PUT /api/admin/game/paid-all': { status: 200, body: { ...GAME, paid: ['p1', 'p2'] } } }))
+  it('Marcar todos marca na tela, sem requisição', async () => {
+    const f = setup(authed())
     await pagou('Ana')
     expect(screen.getByText('Quem vai jogar')).toBeTruthy()
     fireEvent.click(all())
-    expect(await counterAsync('2 de 2 jogadores')).toBeTruthy()
-    expect(body(calls(f, 'PUT /api/admin/game/paid-all')[0])).toBe('{"paid":true}')
+    expect(counter('2 de 2 jogadores')).toBeTruthy()
     expect((await pagou('Bia')).checked).toBe(true)
+    expect(anyPut(f)).toHaveLength(0)
   })
 
-  it('Limpar sem sorteio envia {"paid":false} na hora, sem confirmação', async () => {
-    const f = setup(
-      authed({
-        'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1', 'p2'] } },
-        'PUT /api/admin/game/paid-all': { status: 200, body: GAME },
-      }),
-    )
+  it('Limpar sem sorteio desmarca todos na hora, sem confirmação e sem requisição', async () => {
+    const f = setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1', 'p2'] } } }))
     await pagou('Ana')
     fireEvent.click(none())
-    expect(await counterAsync('0 de 2 jogadores')).toBeTruthy()
-    expect(body(calls(f, 'PUT /api/admin/game/paid-all')[0])).toBe('{"paid":false}')
+    expect(counter('0 de 2 jogadores')).toBeTruthy()
     expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
+    expect(anyPut(f)).toHaveLength(0)
   })
 
-  it('Limpar com sorteio pede confirmação e só envia depois de confirmar', async () => {
-    const f = setup(
-      authed({
-        'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1', 'p2'], draw: DRAW } },
-        'PUT /api/admin/game/paid-all': { status: 200, body: GAME },
-      }),
-    )
+  it('Limpar com sorteio pede confirmação e só limpa depois de confirmar', async () => {
+    const f = setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1', 'p2'], draw: DRAW } } }))
     await pagou('Ana')
     fireEvent.click(none())
     expect(screen.getByText('O sorteio será apagado.')).toBeTruthy()
-    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
+    expect(counter('2 de 2 jogadores')).toBeTruthy()
     const card = screen.getByRole('group', { name: 'Confirmar limpeza' })
     fireEvent.click(within(card).getByRole('button', { name: 'Limpar tudo' }))
-    expect(await counterAsync('0 de 2 jogadores')).toBeTruthy()
-    expect(body(calls(f, 'PUT /api/admin/game/paid-all')[0])).toBe('{"paid":false}')
+    expect(counter('0 de 2 jogadores')).toBeTruthy()
     expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
     expect(document.activeElement).toBe(all())
+    expect(anyPut(f)).toHaveLength(0)
   })
 
-  it('cancelar a confirmação não envia nada e devolve o foco ao Limpar', async () => {
-    const f = setup(
-      authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1'], draw: DRAW } } }),
-    )
+  it('cancelar a confirmação não muda nada e devolve o foco ao Limpar', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1'], draw: DRAW } } }))
     await pagou('Ana')
     const trigger = none()
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
-    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
+    expect(counter('1 de 2 jogadores')).toBeTruthy()
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('Esc fecha a confirmação sem enviar e devolve o foco ao Limpar', async () => {
-    const f = setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, draw: DRAW } } }))
+  it('Esc fecha a confirmação sem limpar e devolve o foco ao Limpar', async () => {
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1'], draw: DRAW } } }))
     await pagou('Ana')
     const trigger = none()
     fireEvent.click(trigger)
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar' }))
     fireEvent.keyDown(screen.getByRole('button', { name: 'Cancelar' }), { key: 'Escape' })
     expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
-    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
+    expect(counter('1 de 2 jogadores')).toBeTruthy()
     expect(document.activeElement).toBe(trigger)
   })
 
   it('só reservas no sorteio também pede confirmação', async () => {
-    const f = setup(
+    setup(
       authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, draw: { ...DRAW, teams: [[], []], reserves: ['p1'] } } } }),
     )
     await pagou('Ana')
     fireEvent.click(none())
     expect(screen.getByText('O sorteio será apagado.')).toBeTruthy()
-    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
-  })
-
-  it('a confirmação fica desabilitada enquanto uma caixa está em andamento', async () => {
-    const d = deferred()
-    setup(
-      authed({
-        'GET /api/admin/game': { status: 200, body: { ...GAME, draw: DRAW } },
-        'PUT /api/admin/game/paid': () => d.promise,
-      }),
-    )
-    const box = await pagou('Ana')
-    fireEvent.click(none())
-    fireEvent.click(box)
-    expect((screen.getByRole('button', { name: 'Limpar tudo' }) as HTMLButtonElement).disabled).toBe(true)
-    d.resolve({ status: 200, body: GAME })
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Limpar tudo' }) as HTMLButtonElement).disabled).toBe(false))
   })
 
   it('sorteio sem ninguém alocado não pede confirmação', async () => {
     const empty = { ...DRAW, teams: [[], []], reserves: [] }
-    const f = setup(
-      authed({
-        'GET /api/admin/game': { status: 200, body: { ...GAME, draw: empty } },
-        'PUT /api/admin/game/paid-all': { status: 200, body: GAME },
-      }),
-    )
+    setup(authed({ 'GET /api/admin/game': { status: 200, body: { ...GAME, paid: ['p1'], draw: empty } } }))
     await pagou('Ana')
     fireEvent.click(none())
-    await waitFor(() => expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(1))
+    expect(screen.queryByText('O sorteio será apagado.')).toBeNull()
+    expect(counter('0 de 2 jogadores')).toBeTruthy()
   })
 
   it('sem jogo ativo os dois botões ficam desabilitados, com explicação', async () => {
@@ -517,56 +452,5 @@ describe('Marcar todos / Limpar', () => {
     expect(none().disabled).toBe(true)
     expect(all().title).toBe('Cadastre a data do jogo primeiro')
     expect(none().title).toBe('Cadastre a data do jogo primeiro')
-  })
-
-  it('durante a chamada: aria-busy, segundo clique ignorado e caixas desabilitadas', async () => {
-    const d = deferred()
-    const f = setup(authed({ 'PUT /api/admin/game/paid-all': () => d.promise }))
-    const box = await pagou('Ana')
-    fireEvent.click(all())
-    fireEvent.click(all())
-    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(1)
-    expect(all().getAttribute('aria-busy')).toBe('true')
-    expect(all().disabled).toBe(true)
-    expect(none().disabled).toBe(true)
-    expect(box.disabled).toBe(true)
-    d.resolve({ status: 200, body: { ...GAME, paid: ['p1', 'p2'] } })
-    await waitFor(() => expect(box.disabled).toBe(false))
-    expect(all().getAttribute('aria-busy')).toBeNull()
-    expect(all().disabled).toBe(false)
-  })
-
-  it('com uma caixa em andamento os botões em lote ficam desabilitados', async () => {
-    const d = deferred()
-    const f = setup(authed({ 'PUT /api/admin/game/paid': () => d.promise }))
-    fireEvent.click(await pagou('Ana'))
-    expect(all().disabled).toBe(true)
-    fireEvent.click(all())
-    expect(calls(f, 'PUT /api/admin/game/paid-all')).toHaveLength(0)
-    d.resolve({ status: 200, body: { ...GAME, paid: ['p1'] } })
-    await waitFor(() => expect(all().disabled).toBe(false))
-  })
-
-  it('401 volta ao login', async () => {
-    setup(authed({ 'PUT /api/admin/game/paid-all': { status: 401 } }))
-    await pagou('Ana')
-    fireEvent.click(all())
-    expect(await screen.findByLabelText('Senha')).toBeTruthy()
-  })
-
-  it('404 recarrega os dados e avisa que o jogo mudou', async () => {
-    const f = setup(authed({ 'PUT /api/admin/game/paid-all': { status: 404, body: { error: 'Não há jogo ativo' } } }))
-    await pagou('Ana')
-    fireEvent.click(all())
-    expect((await screen.findByRole('alert')).textContent).toBe('O jogo mudou. A página foi atualizada.')
-    await waitFor(() => expect(calls(f, 'GET /api/admin/game')).toHaveLength(2))
-  })
-
-  it('400 mostra a mensagem do servidor', async () => {
-    setup(authed({ 'PUT /api/admin/game/paid-all': { status: 400, body: { error: 'Corpo inválido' } } }))
-    await pagou('Ana')
-    fireEvent.click(all())
-    expect((await screen.findByRole('alert')).textContent).toBe('Corpo inválido')
-    expect(all().disabled).toBe(false)
   })
 })

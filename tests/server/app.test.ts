@@ -46,6 +46,8 @@ const ADMIN_ROUTES: [string, string][] = [
   ['PUT', '/admin/game/paid'],
   ['PUT', '/admin/game/paid-all'],
   ['PUT', '/admin/game/draw'],
+  ['PUT', '/admin/game/state'],
+  ['GET', '/admin/bootstrap'],
   ['GET', '/admin/settings'],
   ['PATCH', '/admin/settings'],
   ['GET', '/admin/history'],
@@ -450,5 +452,50 @@ describe('game time routes', () => {
     expect(((await ok.json()) as { time: string }).time).toBe('21:00')
     expect((await send('PATCH', '/admin/game', { date: TODAY, time: '7:5' }, cookie)).status).toBe(400)
     expect((await send('PATCH', '/admin/game', { date: TODAY, time: null }, cookie)).status).toBe(400)
+  })
+})
+
+describe('estado do jogo e bootstrap', () => {
+  it('bootstrap devolve jogo, configurações e jogadores numa resposta', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    const empty = await send('GET', '/admin/bootstrap', undefined, cookie)
+    expect(empty.status).toBe(200)
+    expect(await empty.json()).toEqual({ game: null, settings: { memberSeesStars: false }, players: [] })
+    const p = (await (await send('POST', '/admin/players', { name: 'Ana', rating: 3 }, cookie)).json()) as { id: string }
+    await send('POST', '/admin/game', { date: TODAY }, cookie)
+    const body = (await (await send('GET', '/admin/bootstrap', undefined, cookie)).json()) as {
+      game: { date: string; paid: string[] }
+      players: { id: string }[]
+    }
+    expect(body.game).toMatchObject({ date: TODAY, paid: [] })
+    expect(body.players.map((x) => x.id)).toEqual([p.id])
+  })
+
+  it('PUT /admin/game/state salva confirmações e sorteio juntos', async () => {
+    const { send, session, call } = setup()
+    const cookie = await session()
+    const ids: string[] = []
+    for (const name of ['Ana', 'Bia']) {
+      ids.push(((await (await send('POST', '/admin/players', { name, rating: 3 }, cookie)).json()) as { id: string }).id)
+    }
+    await send('POST', '/admin/game', { date: TODAY }, cookie)
+    const draw = { teamCount: 2, teamSize: 1, teams: [[ids[0]!], [ids[1]!]], reserves: [], locks: {} }
+    const res = await send('PUT', '/admin/game/state', { paid: ids, draw }, cookie)
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { paid: string[] }).paid.sort()).toEqual([...ids].sort())
+    const pub = (await (await call('/game')).json()) as { teams: string[][] }
+    expect(pub.teams.flat().sort()).toEqual([...ids].sort())
+  })
+
+  it('valida o corpo: 400 e 404', async () => {
+    const { send, session } = setup()
+    const cookie = await session()
+    expect((await send('PUT', '/admin/game/state', { paid: [], draw: null }, cookie)).status).toBe(404)
+    await send('POST', '/admin/game', { date: TODAY }, cookie)
+    expect((await send('PUT', '/admin/game/state', { paid: 'x', draw: null }, cookie)).status).toBe(400)
+    expect((await send('PUT', '/admin/game/state', { paid: [] }, cookie)).status).toBe(400)
+    expect((await send('PUT', '/admin/game/state', { paid: ['nope'], draw: null }, cookie)).status).toBe(400)
+    expect((await send('PUT', '/admin/game/state', { paid: [], draw: null }, cookie)).status).toBe(200)
   })
 })

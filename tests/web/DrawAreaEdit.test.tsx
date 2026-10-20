@@ -22,32 +22,37 @@ const DRAW = (over: Partial<DrawState> = {}): DrawState => ({
   ...over,
 })
 const GAME = (draw: DrawState | null): Game => ({ id: 'g', date: '2026-10-24', time: '19:00', paid: PAID, draw })
-const respond = (status: number, body?: unknown) =>
-  ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
 
 /** Espiona drops que chegam acima do card: a linha deve parar a propagação. */
 const parentDrop = vi.fn()
 
-function setup(initial: Game, handler: (init: RequestInit) => Promise<Response> | Response) {
-  const fetchMock = vi.fn(async (_p: string, init: RequestInit = {}) => handler(init))
+function setup(initial: Game, opts: { externalBusy?: boolean } = {}) {
+  // Edições só mexem no rascunho local (onGameChange): nenhuma requisição sai daqui.
+  const fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
-  const onUnauthorized = vi.fn()
+  const onGameChange = vi.fn()
   parentDrop.mockClear()
   function Host() {
     const [game, setGame] = useState<Game>(initial)
     return (
       <div onDrop={parentDrop}>
-        <DrawArea game={game} players={PLAYERS} onGameChange={(g) => g && setGame(g)} onUnauthorized={onUnauthorized} />
+        <DrawArea
+          game={game}
+          players={PLAYERS}
+          externalBusy={opts.externalBusy}
+          onGameChange={(g) => {
+            onGameChange(g)
+            setGame(g)
+          }}
+        />
       </div>
     )
   }
   render(<Host />)
-  return { fetchMock, onUnauthorized }
+  return { fetchMock, onGameChange }
 }
-/** Servidor fake que aceita o que recebe. */
-const echo = (init: RequestInit) => respond(200, GAME(JSON.parse(init.body as string)))
 
-const sent = (f: ReturnType<typeof vi.fn>, i = 0) => JSON.parse((f.mock.calls[i][1] as RequestInit).body as string) as DrawState
+const sent = (f: ReturnType<typeof vi.fn>) => (f.mock.calls.at(-1)![0] as Game).draw as DrawState
 const row = (name: string) => screen.getByText(name).closest('li') as HTMLElement
 const card = (letter: string) => screen.getByRole('heading', { name: `Time ${letter}` }).closest('section') as HTMLElement
 const dt = () => ({ setData: vi.fn(), getData: vi.fn(), effectAllowed: '', dropEffect: '' })
@@ -59,89 +64,73 @@ function drag(name: string) {
   return data
 }
 
-describe('jogo finalizado em outra aba', () => {
-  it('404 ao salvar chama onStale e mostra que o jogo mudou', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => respond(404, { error: 'Não há jogo ativo' })))
-    const onStale = vi.fn()
-    render(
-      <DrawArea game={GAME(DRAW())} players={PLAYERS} onGameChange={() => {}} onUnauthorized={() => {}} onStale={onStale} />,
-    )
-    fireEvent.drop(card('B'), { dataTransfer: drag('Ana') })
-    await waitFor(() => expect(onStale).toHaveBeenCalledTimes(1))
-    expect(screen.getByRole('alert').textContent).toBe('O jogo mudou. A página foi atualizada.')
-  })
-})
-
 describe('arrastar e soltar', () => {
-  it('soltar em outro time faz um PUT e a tela mostra a RESPOSTA', async () => {
-    const reply = DRAW({ teams: [['b'], ['c', 'a']], reserves: ['d', 'e'] })
-    const { fetchMock } = setup(GAME(DRAW()), () => respond(200, GAME(reply)))
+  it('soltar em outro time atualiza só o rascunho e a tela mostra o novo time', async () => {
+    const { fetchMock, onGameChange } = setup(GAME(DRAW()))
     const data = drag('Ana')
     expect(data.effectAllowed).toBe('move')
     expect(data.setData).toHaveBeenCalledWith('text/plain', 'a')
     fireEvent.drop(card('B'), { dataTransfer: data })
     await waitFor(() => expect(within(card('B')).getByText('Ana')).toBeTruthy())
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe('/api/admin/game/draw')
-    expect(init.method).toBe('PUT')
-    expect(sent(fetchMock).teams).toEqual([['b'], ['c', 'a']])
+    expect(onGameChange).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(sent(onGameChange).teams).toEqual([['b'], ['c', 'a']])
   })
 
   it('soltar em time cheio: sem requisição e o motivo no alerta', () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+    const { onGameChange } = setup(GAME(DRAW()))
     const data = drag('Cris')
     fireEvent.drop(card('A'), { dataTransfer: data })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(onGameChange).not.toHaveBeenCalled()
     expect(screen.getByRole('alert').textContent).toBe(
       'Time A está cheio (2 jogadores). Troque com alguém ou mova alguém para as reservas.',
     )
   })
 
   it('soltar no mesmo time não faz requisição', () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+    const { onGameChange } = setup(GAME(DRAW()))
     fireEvent.drop(card('A'), { dataTransfer: drag('Ana') })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(onGameChange).not.toHaveBeenCalled()
   })
 
   it('soltar sobre outro jogador troca os dois', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+    const { onGameChange } = setup(GAME(DRAW()))
     const data = drag('Ana')
     fireEvent.drop(row('Cris'), { dataTransfer: data })
     // a linha trata o drop e não deixa chegar ao card nem acima
     expect(parentDrop).not.toHaveBeenCalled()
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock).teams).toEqual([['c', 'b'], ['a']])
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange).teams).toEqual([['c', 'b'], ['a']])
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('soltar sobre um jogador troca mesmo com o time cheio e só dispara uma vez', async () => {
-    const { fetchMock } = setup(GAME(DRAW({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'] })), echo)
+    const { onGameChange } = setup(GAME(DRAW({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'] })))
     fireEvent.drop(row('Cris'), { dataTransfer: drag('Ana') })
     expect(parentDrop).not.toHaveBeenCalled()
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock).teams).toEqual([['c', 'b'], ['a', 'd']])
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange).teams).toEqual([['c', 'b'], ['a', 'd']])
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('soltar nas reservas manda o jogador para lá', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+    const { onGameChange } = setup(GAME(DRAW()))
     fireEvent.drop(reserves(), { dataTransfer: drag('Bia') })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock)).toMatchObject({ teams: [['a'], ['c']], reserves: ['d', 'e', 'b'] })
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange)).toMatchObject({ teams: [['a'], ['c']], reserves: ['d', 'e', 'b'] })
   })
 
   it('arrastar uma reserva para um time', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+    const { onGameChange } = setup(GAME(DRAW()))
     const data = dt()
     fireEvent.dragStart(screen.getByText('Duda').closest('li') as HTMLElement, { dataTransfer: data })
     fireEvent.drop(card('B'), { dataTransfer: data })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock)).toMatchObject({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'] })
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange)).toMatchObject({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'] })
   })
 
   it('sem reservas, a barra aparece como alvo durante o arrasto', () => {
-    setup(GAME(DRAW({ reserves: [] })), echo)
+    setup(GAME(DRAW({ reserves: [] })))
     expect(screen.queryByText('Solte aqui para mandar às reservas')).toBeNull()
     const data = drag('Ana')
     expect(screen.getByText('Solte aqui para mandar às reservas')).toBeTruthy()
@@ -150,7 +139,7 @@ describe('arrastar e soltar', () => {
   })
 
   it('destaca o time sob o arrasto e limpa ao terminar', () => {
-    setup(GAME(DRAW()), echo)
+    setup(GAME(DRAW()))
     const data = drag('Ana')
     fireEvent.dragOver(card('B'), { dataTransfer: data })
     expect(card('B').style.boxShadow).toContain('var(--color-accent)')
@@ -158,101 +147,79 @@ describe('arrastar e soltar', () => {
     expect(card('B').style.boxShadow).toBe('')
   })
 
-  it('a trava acompanha o jogador e vai no corpo do PUT', async () => {
-    const { fetchMock } = setup(GAME(DRAW({ locks: { a: 0 } })), echo)
+  it('a trava acompanha o jogador', async () => {
+    const { onGameChange } = setup(GAME(DRAW({ locks: { a: 0 } })))
     fireEvent.drop(card('B'), { dataTransfer: drag('Ana') })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock).locks).toEqual({ a: 1 })
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange).locks).toEqual({ a: 1 })
   })
 
   it('mandar travado para as reservas remove a trava', async () => {
-    const { fetchMock } = setup(GAME(DRAW({ locks: { a: 0 } })), echo)
+    const { onGameChange } = setup(GAME(DRAW({ locks: { a: 0 } })))
     fireEvent.drop(reserves(), { dataTransfer: drag('Ana') })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock).locks).toEqual({})
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange).locks).toEqual({})
   })
 
-  it('durante o salvamento, outras edições são ignoradas', async () => {
-    let release!: (r: Response) => void
-    const { fetchMock } = setup(GAME(DRAW()), () => new Promise<Response>((r) => (release = r)))
-    fireEvent.drop(card('B'), { dataTransfer: drag('Ana') })
-    await waitFor(() => expect(document.querySelector('[aria-busy="true"]')).toBeTruthy())
+  it('com o rascunho salvando (externalBusy), arrasto, cadeado e seletor são ignorados', () => {
+    const { onGameChange } = setup(GAME(DRAW()), { externalBusy: true })
     fireEvent.drop(reserves(), { dataTransfer: drag('Bia') })
     fireEvent.click(screen.getByRole('button', { name: 'Travar Bia neste time' }))
     fireEvent.change(screen.getByRole('combobox', { name: 'Mover Bia para' }), { target: { value: 'reserves' } })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(onGameChange).not.toHaveBeenCalled()
     expect(screen.getByRole('combobox', { name: 'Mover Bia para' }).getAttribute('aria-disabled')).toBe('true')
     expect(screen.getByRole('button', { name: 'Travar Bia neste time' }).getAttribute('aria-disabled')).toBe('true')
-    release(respond(200, GAME(DRAW({ teams: [['b'], ['c', 'a']] }))))
-    await waitFor(() => expect(document.querySelector('[aria-busy="true"]')).toBeNull())
-  })
-})
-
-describe('erros', () => {
-  it('400 mostra a mensagem do servidor e mantém o sorteio anterior', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), () => respond(400, { error: 'Sorteio inválido' }))
-    fireEvent.drop(card('B'), { dataTransfer: drag('Ana') })
-    await screen.findByRole('alert')
-    expect(screen.getByRole('alert').textContent).toBe('Sorteio inválido')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(within(card('A')).getByText('Ana')).toBeTruthy()
-  })
-
-  it('401 chama onUnauthorized', async () => {
-    const { onUnauthorized } = setup(GAME(DRAW()), () => respond(401, {}))
-    fireEvent.drop(card('B'), { dataTransfer: drag('Ana') })
-    await waitFor(() => expect(onUnauthorized).toHaveBeenCalled())
   })
 })
 
 describe('cadeado', () => {
-  it('travar envia locks com o índice do time e aria-pressed vira depois da resposta', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+  it('travar guarda locks com o índice do time e aria-pressed vira em seguida', async () => {
+    const { onGameChange } = setup(GAME(DRAW()))
     const btn = screen.getByRole('button', { name: 'Travar Cris neste time' })
     expect(btn.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(btn)
     const after = await screen.findByRole('button', { name: 'Destravar Cris' })
     expect(after.getAttribute('aria-pressed')).toBe('true')
-    expect(sent(fetchMock).locks).toEqual({ c: 1 })
+    expect(sent(onGameChange).locks).toEqual({ c: 1 })
   })
 
   it('destravar remove a trava', async () => {
-    const { fetchMock } = setup(GAME(DRAW({ locks: { a: 0 } })), echo)
+    const { onGameChange } = setup(GAME(DRAW({ locks: { a: 0 } })))
     fireEvent.click(screen.getByRole('button', { name: 'Destravar Ana' }))
     await screen.findByRole('button', { name: 'Travar Ana neste time' })
-    expect(sent(fetchMock).locks).toEqual({})
+    expect(sent(onGameChange).locks).toEqual({})
   })
 
   it('reservas não têm cadeado', () => {
-    setup(GAME(DRAW()), echo)
+    setup(GAME(DRAW()))
     expect(screen.queryByRole('button', { name: /Travar Duda/ })).toBeNull()
   })
 })
 
 describe('Mover para (teclado e toque)', () => {
-  it('escolher Time B envia o mesmo pedido que soltar', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+  it('escolher Time B faz a mesma edição que soltar', async () => {
+    const { onGameChange } = setup(GAME(DRAW()))
     fireEvent.change(screen.getByRole('combobox', { name: 'Mover Ana para' }), { target: { value: '1' } })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock).teams).toEqual([['b'], ['c', 'a']])
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange).teams).toEqual([['b'], ['c', 'a']])
   })
 
   it('Reservas manda para as reservas; reserva pode ir para um time', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+    const { onGameChange } = setup(GAME(DRAW()))
     fireEvent.change(screen.getByRole('combobox', { name: 'Mover Duda para' }), { target: { value: '1' } })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock)).toMatchObject({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'] })
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange)).toMatchObject({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'] })
   })
 
   it('Reservas no select', async () => {
-    const { fetchMock } = setup(GAME(DRAW()), echo)
+    const { onGameChange } = setup(GAME(DRAW()))
     fireEvent.change(screen.getByRole('combobox', { name: 'Mover Ana para' }), { target: { value: 'reserves' } })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(sent(fetchMock).reserves).toEqual(['d', 'e', 'a'])
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange).reserves).toEqual(['d', 'e', 'a'])
   })
 
   it('times cheios (menos o próprio) ficam desabilitados com (cheio)', () => {
-    setup(GAME(DRAW()), echo)
+    setup(GAME(DRAW()))
     const cris = screen.getByRole('combobox', { name: 'Mover Cris para' })
     const opts = within(cris).getAllByRole('option') as HTMLOptionElement[]
     expect(opts.map((o) => o.textContent)).toEqual(['Time A (cheio)', 'Time B', 'Reservas'])
@@ -265,13 +232,13 @@ describe('Mover para (teclado e toque)', () => {
 })
 
 describe('Sortear de novo', () => {
-  it('só envia travas coerentes com os times (R18)', async () => {
+  it('só guarda travas coerentes com os times (R18)', async () => {
     const draw = DRAW({ teams: [['a', 'b'], ['c', 'd']], reserves: ['e'], locks: { a: 0, b: 0, c: 0 } })
-    const { fetchMock } = setup(GAME(draw), echo)
+    const { onGameChange } = setup(GAME(draw))
     fireEvent.click(screen.getByRole('button', { name: /Sortear de novo/ }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    const body = sent(fetchMock)
-    // c não coube no time A (cheio com a e b): sua trava não é enviada
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    const body = sent(onGameChange)
+    // c não coube no time A (cheio com a e b): sua trava não é guardada
     expect(body.locks).toEqual({ a: 0, b: 0 })
     expect(body.teams[0].sort()).toEqual(['a', 'b'])
   })
@@ -279,17 +246,17 @@ describe('Sortear de novo', () => {
 
 describe('Copiar escalação', () => {
   it('aparece com sorteio e não aparece sem ele', () => {
-    setup(GAME(DRAW()), echo)
+    setup(GAME(DRAW()))
     expect(screen.getByRole('button', { name: 'Copiar escalação' })).toBeTruthy()
     cleanup()
-    setup(GAME(null), echo)
+    setup(GAME(null))
     expect(screen.queryByRole('button', { name: 'Copiar escalação' })).toBeNull()
   })
 })
 
-describe('foco depois de salvar', () => {
+describe('foco depois de editar', () => {
   it('o select continua focado (já no novo time) e o botão de cadeado também', async () => {
-    setup(GAME(DRAW()), echo)
+    setup(GAME(DRAW()))
     const sel = screen.getByRole('combobox', { name: 'Mover Ana para' })
     sel.focus()
     fireEvent.change(sel, { target: { value: '1' } })
@@ -306,33 +273,24 @@ describe('foco depois de salvar', () => {
   })
 
   it('reserva movida para um time mantém o foco no select', async () => {
-    setup(GAME(DRAW()), echo)
+    setup(GAME(DRAW()))
     const sel = screen.getByRole('combobox', { name: 'Mover Duda para' })
     sel.focus()
     fireEvent.change(sel, { target: { value: '1' } })
     await waitFor(() => expect(within(card('B')).getByText('Duda')).toBeTruthy())
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Mover Duda para' }))
   })
-
-  it('salvamento que falha deixa o foco onde estava', async () => {
-    setup(GAME(DRAW()), () => respond(400, { error: 'ruim' }))
-    const sel = screen.getByRole('combobox', { name: 'Mover Ana para' })
-    sel.focus()
-    fireEvent.change(sel, { target: { value: '1' } })
-    await screen.findByRole('alert')
-    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Mover Ana para' }))
-  })
 })
 
 describe('ids que saíram do sorteio', () => {
   it('arrasta, o jogador sai do sorteio por fora e o drop não faz requisição nem quebra', () => {
-    const fetchMock = vi.fn(async () => respond(200, {}))
+    const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const withAna = GAME(DRAW())
     const withoutAna = GAME(DRAW({ teams: [['b'], ['c']] }))
-    const view = render(<DrawArea game={withAna} players={PLAYERS} onGameChange={() => {}} onUnauthorized={() => {}} />)
+    const view = render(<DrawArea game={withAna} players={PLAYERS} onGameChange={() => {}} />)
     const data = drag('Ana')
-    view.rerender(<DrawArea game={withoutAna} players={PLAYERS} onGameChange={() => {}} onUnauthorized={() => {}} />)
+    view.rerender(<DrawArea game={withoutAna} players={PLAYERS} onGameChange={() => {}} />)
     expect(screen.queryByText('Ana')).toBeNull()
     fireEvent.drop(card('B'), { dataTransfer: { ...data, getData: () => 'a' } })
     fireEvent.drop(reserves(), { dataTransfer: { ...data, getData: () => 'a' } })
@@ -344,7 +302,7 @@ describe('ids que saíram do sorteio', () => {
 
 describe('Copiar escalação sem ninguém colocado', () => {
   it('não aparece quando nenhum id do sorteio existe na lista de jogadores', () => {
-    setup(GAME(DRAW({ teams: [['x'], ['y']], reserves: ['z'] })), echo)
+    setup(GAME(DRAW({ teams: [['x'], ['y']], reserves: ['z'] })))
     expect(screen.queryByRole('button', { name: 'Copiar escalação' })).toBeNull()
   })
 })

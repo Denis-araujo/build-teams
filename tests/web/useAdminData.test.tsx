@@ -19,12 +19,10 @@ it('um reload antigo não sobrescreve o estado definido por uma mutação mais n
   vi.stubGlobal(
     'fetch',
     vi.fn(async (path: string) => {
-      if (path === '/api/admin/game') {
+      if (path === '/api/admin/bootstrap') {
         if (slow) await new Promise<void>((r) => (release = r))
-        return res(OLD)
+        return res({ game: OLD, settings: { memberSeesStars: false }, players: [] })
       }
-      if (path === '/api/admin/settings') return res({ memberSeesStars: false })
-      if (path === '/api/admin/players') return res([])
       throw new Error(path)
     }),
   )
@@ -49,12 +47,10 @@ it('mutação de jogadores durante uma recarga em voo não é perdida (a recarga
   vi.stubGlobal(
     'fetch',
     vi.fn(async (path: string) => {
-      if (path === '/api/admin/game') {
+      if (path === '/api/admin/bootstrap') {
         if (slow) await new Promise<void>((r) => (release = r))
-        return res(OLD)
+        return res({ game: OLD, settings: { memberSeesStars: false }, players: [] })
       }
-      if (path === '/api/admin/settings') return res({ memberSeesStars: false })
-      if (path === '/api/admin/players') return res([])
       throw new Error(path)
     }),
   )

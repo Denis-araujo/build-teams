@@ -61,7 +61,8 @@ export const api = {
       throw e
     }
   },
-  getAdminGame: () => request<Game | null>('/api/admin/game'),
+  getBootstrap: () =>
+    request<{ game: Game | null; settings: Settings; players: Player[] }>('/api/admin/bootstrap'),
   createGame: (date: string, time: string) =>
     request<Game>('/api/admin/game', { method: 'POST', body: JSON.stringify({ date, time }) }),
   updateGameDate: (date: string, time: string) =>
@@ -84,10 +85,7 @@ export const api = {
     }),
   archivePlayer: (id: string) =>
     request<void>(`/api/admin/players/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  setPaid: (playerId: string, paid: boolean) =>
-    request<Game>('/api/admin/game/paid', { method: 'PUT', body: JSON.stringify({ playerId, paid }) }),
-  setAllPaid: (paid: boolean) =>
-    request<Game>('/api/admin/game/paid-all', { method: 'PUT', body: JSON.stringify({ paid }) }),
-  saveDraw: (state: DrawState) =>
-    request<Game>('/api/admin/game/draw', { method: 'PUT', body: JSON.stringify(state) }),
+  /** Salva de uma vez as confirmações e o sorteio editados na tela. */
+  saveGameState: (paid: string[], draw: DrawState | null) =>
+    request<Game>('/api/admin/game/state', { method: 'PUT', body: JSON.stringify({ paid, draw }) }),
 }

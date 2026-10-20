@@ -167,12 +167,22 @@ export default function MemberPage() {
             >
               Não foi possível carregar a escalação. Tentando de novo…
             </p>
+          ) : loading ? (
+            <div
+              className="flex w-full flex-col items-center justify-center gap-4 rounded-lg bg-surface px-[28px] py-[72px] shadow-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <span
+                aria-hidden="true"
+                className="size-9 animate-spin rounded-full border-[3px] border-neutral-800 border-t-[var(--navy)] motion-reduce:animate-none"
+              />
+              <span className="text-[14px] text-neutral-400">Carregando a escalação…</span>
+            </div>
           ) : (
-            !loading && (
-              <div className="w-full">
-                <GameCard game={null} />
-              </div>
-            )
+            <div className="w-full">
+              <GameCard game={null} />
+            </div>
           )
         ) : (
           <>

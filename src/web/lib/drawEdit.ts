@@ -10,7 +10,8 @@ function locate(draw: DrawState, id: string): number | null {
   return draw.reserves.includes(id) ? -1 : null
 }
 
-function withoutPlayer(draw: DrawState, id: string): DrawState {
+/** Tira o jogador dos times, das reservas e das travas (ex.: ao desmarcar a confirmação). */
+export function withoutPlayer(draw: DrawState, id: string): DrawState {
   const locks = { ...draw.locks }
   delete locks[id]
   return {
@@ -19,6 +20,11 @@ function withoutPlayer(draw: DrawState, id: string): DrawState {
     reserves: draw.reserves.filter((x) => x !== id),
     locks,
   }
+}
+
+/** Mesmo formato, todos fora dos times e das reservas (ex.: ao limpar as confirmações). */
+export function emptiedDraw(draw: DrawState): DrawState {
+  return { ...draw, teams: draw.teams.map(() => []), reserves: [], locks: {} }
 }
 
 export function moveToTeam(draw: DrawState, playerId: string, teamIndex: number): DrawState {

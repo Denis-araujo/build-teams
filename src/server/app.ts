@@ -20,6 +20,7 @@ import {
   getActiveGame,
   getSetting,
   saveDraw,
+  saveGameState,
   archivePlayerInGame,
   setAllPaid,
   setPaid,
@@ -206,6 +207,24 @@ export function createApp(opts: { now?: () => Date } = {}) {
   app.put('/admin/game/draw', async (c) =>
     c.json(await saveDraw(c.env.DB, parseDraw(await readBody(c)))),
   )
+
+  app.put('/admin/game/state', async (c) => {
+    const { paid, draw } = await readBody(c)
+    if (!isStringArray(paid) || paid.length > MAX_IDS) throw bad()
+    if (draw !== null && !isObject(draw)) throw bad()
+    return c.json(await saveGameState(c.env.DB, paid, draw === null ? null : parseDraw(draw)))
+  })
+
+  // Carga inicial do painel numa requisição só (jogo, configurações e jogadores).
+  app.get('/admin/bootstrap', async (c) => {
+    const db = c.env.DB
+    const [game, memberSeesStars, players] = await Promise.all([
+      getActiveGame(db),
+      getSetting(db, 'member_sees_stars'),
+      listPlayers(db),
+    ])
+    return c.json({ game, settings: { memberSeesStars }, players })
+  })
 
   app.get('/admin/settings', async (c) =>
     c.json({ memberSeesStars: await getSetting(c.env.DB, 'member_sees_stars') }),

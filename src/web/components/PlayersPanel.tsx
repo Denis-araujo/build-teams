@@ -1,21 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { api, HttpError, UnauthorizedError } from '../api'
 import type { Game, Player } from '../../shared/types'
+import { emptiedDraw, withoutPlayer } from '../lib/drawEdit'
 import { formatRating, StarRating } from './StarRating'
 
 type Props = {
   players: Player[]
   game: Game | null
   onPlayersChange(players: Player[]): void
-  onGameChange(game: Game | null): void
-  /** Chamado quando o servidor diz que o jogo sumiu (404): a página recarrega os dados. */
-  onStale?(): void
+  /** Edição local das confirmações (e do sorteio, quando alguém sai dele): nada vai ao servidor. */
+  onGameChange(game: Game): void
   onUnauthorized: () => void
   /** Rodapé do card (ex.: a configuração "Membro vê as estrelas"). */
   footer?: ReactNode
-  /** Avisa a página quando uma chamada em lote (marcar todos / limpar) começa ou termina. */
-  onBusyChange?(busy: boolean): void
-  /** O sorteio está salvando fora daqui: bloqueia as ações em lote. */
+  /** O rascunho está sendo salvo: bloqueia as edições. */
   externalBusy?: boolean
 }
 
@@ -25,13 +23,13 @@ function PlayerRow(props: {
   player: Player
   paid: boolean
   hasGame: boolean
-  pending: boolean
+  disabled: boolean
   onTogglePaid(paid: boolean): void
   onRename(name: string): Promise<boolean>
   onRate(rating: number): void
   onRemove(): void
 }) {
-  const { player, paid, hasGame, pending, onTogglePaid, onRename, onRate, onRemove } = props
+  const { player, paid, hasGame, disabled, onTogglePaid, onRename, onRate, onRemove } = props
   const [draft, setDraft] = useState(player.name)
   // Acompanha o nome do servidor: se mudar (renomeado, recarregado), o campo segue.
   const [seen, setSeen] = useState(player.name)
@@ -67,7 +65,7 @@ function PlayerRow(props: {
         className="size-4 accent-[var(--navy)] cursor-pointer m-0 flex-none disabled:cursor-not-allowed"
         aria-label={`Pagou: ${player.name}`}
         checked={paid}
-        disabled={!hasGame || pending}
+        disabled={!hasGame || disabled}
         title={hasGame ? undefined : 'Cadastre a data do jogo primeiro'}
         onChange={(e) => onTogglePaid(e.target.checked)}
       />
@@ -103,18 +101,11 @@ function PlayerRow(props: {
   )
 }
 
-export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized, onStale, footer, onBusyChange, externalBusy = false }: Props) {
+export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onUnauthorized, footer, externalBusy = false }: Props) {
   const [name, setName] = useState('')
   const [rating, setRating] = useState(DEFAULT_RATING)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  const inFlight = useRef(new Set<string>())
-  const [bulk, setBulk] = useState(false)
-  const bulkBusy = useRef(false)
-  useEffect(() => {
-    onBusyChange?.(bulk)
-  }, [bulk, onBusyChange])
   // Guarda o id do jogo para a confirmação sumir se o jogo mudar ou desaparecer.
   const [confirmingFor, setConfirmingFor] = useState<string | null>(null)
   const confirmingClear = confirmingFor !== null && game?.id === confirmingFor
@@ -126,11 +117,11 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     if (confirmingClear) cancelBtn.current?.focus()
   }, [confirmingClear])
   useLayoutEffect(() => {
-    if (focusAll && !bulk) {
+    if (focusAll) {
       allBtn.current?.focus()
       setFocusAll(false)
     }
-  }, [focusAll, bulk])
+  }, [focusAll])
   // Sempre a lista mais recente, para que respostas tardias não apliquem sobre uma lista velha.
   const latest = useRef(players)
   latest.current = players
@@ -208,26 +199,16 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     }
   }
 
-  async function setAll(paid: boolean, confirmed = false) {
-    if (bulkBusy.current || externalBusy || inFlight.current.size > 0) return
-    bulkBusy.current = true
-    setBulk(true)
+  function setAll(paid: boolean, confirmed = false) {
+    if (!game || externalBusy) return
     setConfirmingFor(null)
     setError(null)
-    try {
-      onGameChange(await api.setAllPaid(paid))
-    } catch (err) {
-      if (err instanceof HttpError && err.status === 404) {
-        onStale?.()
-        setError('O jogo mudou. A página foi atualizada.')
-        return
-      }
-      fail(err, 'Não foi possível salvar os pagamentos. Tente de novo.')
-    } finally {
-      bulkBusy.current = false
-      setBulk(false)
-      if (confirmed) setFocusAll(true)
-    }
+    onGameChange({
+      ...game,
+      paid: paid ? players.map((p) => p.id) : [],
+      draw: !paid && game.draw ? emptiedDraw(game.draw) : game.draw,
+    })
+    if (confirmed) setFocusAll(true)
   }
 
   function clearAll() {
@@ -235,28 +216,17 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
     const d = game?.draw
     const hasDraw = !!d && (d.teams.some((t) => t.length > 0) || d.reserves.length > 0)
     if (hasDraw && game) setConfirmingFor(game.id)
-    else void setAll(false)
+    else setAll(false)
   }
 
-  async function togglePaid(id: string, paid: boolean) {
-    if (bulkBusy.current || inFlight.current.has(id)) return
-    inFlight.current.add(id)
-    setPending(new Set(inFlight.current))
+  function togglePaid(id: string, paid: boolean) {
+    if (!game || externalBusy) return
+    const next = new Set(game.paid)
+    if (paid) next.add(id)
+    else next.delete(id)
     setError(null)
-    try {
-      onGameChange(await api.setPaid(id, paid))
-    } catch (err) {
-      if (err instanceof HttpError && err.status === 404) {
-        onStale?.()
-        setError('O jogo mudou. A página foi atualizada.')
-        return
-      }
-      const who = latest.current.find((p) => p.id === id)?.name
-      fail(err, 'Não foi possível salvar o pagamento. Tente de novo.', { who, useServerMessage: false })
-    } finally {
-      inFlight.current.delete(id)
-      setPending(new Set(inFlight.current))
-    }
+    // Quem sai da lista sai também dos times, das reservas e das travas.
+    onGameChange({ ...game, paid: [...next], draw: !paid && game.draw ? withoutPlayer(game.draw, id) : game.draw })
   }
 
   const paidSet = new Set(game?.paid ?? [])
@@ -312,11 +282,11 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
             <button
               type="button"
               className="btn btn-ghost text-[12px] px-2 py-1"
-              disabled={!game || bulk || externalBusy || pending.size > 0}
+              disabled={!game || externalBusy}
               ref={allBtn}
-              aria-busy={bulk || externalBusy || undefined}
+              aria-busy={externalBusy || undefined}
               title={game ? undefined : 'Cadastre a data do jogo primeiro'}
-              onClick={() => void setAll(true)}
+              onClick={() => setAll(true)}
             >
               Marcar todos
             </button>
@@ -324,8 +294,8 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
               ref={clearBtn}
               type="button"
               className="btn btn-ghost text-[12px] px-2 py-1"
-              disabled={!game || bulk || externalBusy || pending.size > 0}
-              aria-busy={bulk || externalBusy || undefined}
+              disabled={!game || externalBusy}
+              aria-busy={externalBusy || undefined}
               title={game ? undefined : 'Cadastre a data do jogo primeiro'}
               onClick={clearAll}
             >
@@ -365,8 +335,8 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={bulk || externalBusy || pending.size > 0}
-                onClick={() => void setAll(false, true)}
+                disabled={externalBusy}
+                onClick={() => setAll(false, true)}
               >
                 Limpar tudo
               </button>
@@ -388,8 +358,8 @@ export function PlayersPanel({ players, game, onPlayersChange, onGameChange, onU
             player={p}
             paid={paidSet.has(p.id)}
             hasGame={game !== null}
-            pending={pending.has(p.id) || bulk}
-            onTogglePaid={(paid) => void togglePaid(p.id, paid)}
+            disabled={externalBusy}
+            onTogglePaid={(paid) => togglePaid(p.id, paid)}
             onRename={(n) => update(p.id, { name: n })}
             onRate={(r) => void update(p.id, { rating: r })}
             onRemove={() => void remove(p)}

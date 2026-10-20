@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { api, HttpError, UnauthorizedError } from '../api'
 import { drawTeams } from '../../shared/draw'
 import type { DrawState, Game, Player } from '../../shared/types'
 import { outsideCount } from '../lib/drawStats'
@@ -17,13 +16,9 @@ type Props = {
   gameCard?: ReactNode
   game: Game | null
   players: Player[]
-  onGameChange(game: Game | null): void
-  /** Chamado quando o servidor diz que o jogo sumiu (404): a página recarrega os dados. */
-  onStale?(): void
-  onUnauthorized(): void
-  /** Avisa a página quando um salvamento começa ou termina. */
-  onBusyChange?(busy: boolean): void
-  /** Uma chamada em lote (ex.: marcar todos) está em andamento fora daqui: bloqueia as edições. */
+  /** Edição local do sorteio: nada vai ao servidor até o Salvar da página. */
+  onGameChange(game: Game): void
+  /** O rascunho está sendo salvo: bloqueia as edições. */
   externalBusy?: boolean
 }
 
@@ -39,17 +34,12 @@ const LOCK_OFF =
 
 const DEFAULTS = { teamCount: 2, teamSize: 6 }
 
-export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized, onStale, onBusyChange, externalBusy = false }: Props) {
+export function DrawArea({ gameCard, game, players, onGameChange, externalBusy = false }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const blocked = busy || externalBusy
-  useEffect(() => {
-    onBusyChange?.(busy)
-  }, [busy, onBusyChange])
+  const blocked = externalBusy
   const [error, setError] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [over, setOver] = useState<number | 'reserves' | null>(null)
-  const inFlight = useRef(false)
   const rootRef = useRef<HTMLElement>(null)
   const pendingFocus = useRef<{ id: string; control: 'lock' | 'move' } | null>(null)
 
@@ -64,29 +54,19 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
   )
   const lockedCount = Object.keys(survivingLocks).length
 
-  /** Toda mudança passa por aqui: sanear travas, salvar e só então mostrar o que o servidor devolveu. */
-  async function persist(build: () => DrawState, focus?: { id: string; control: 'lock' | 'move' }) {
-    if (!game || inFlight.current || externalBusy) return
-    inFlight.current = true
-    setBusy(true)
+  /** Toda mudança passa por aqui: sanear travas e atualizar o rascunho local (o servidor só vê no Salvar). */
+  function persist(build: () => DrawState, focus?: { id: string; control: 'lock' | 'move' }) {
+    if (!game || externalBusy) return
     setError(null)
     try {
       const next = build()
-      // Transformação que não mudou nada (id que saiu do sorteio, reserva travada...): nada a salvar.
+      // Transformação que não mudou nada (id que saiu do sorteio, reserva travada...): nada a fazer.
       if (draw && next === draw) return
       pendingFocus.current = focus ?? null
-      onGameChange(await api.saveDraw(sanitizeLocks(next)))
-    } catch (e) {
+      onGameChange({ ...game, draw: sanitizeLocks(next) })
+    } catch {
       pendingFocus.current = null
-      if (e instanceof UnauthorizedError) onUnauthorized()
-      else if (e instanceof HttpError && e.status === 404) {
-        onStale?.()
-        setError('O jogo mudou. A página foi atualizada.')
-      }
-      else setError(e instanceof HttpError && e.serverMessage ? e.serverMessage : 'Não foi possível salvar o sorteio. Tente de novo.')
-    } finally {
-      inFlight.current = false
-      setBusy(false)
+      setError('Não foi possível sortear. Tente de novo.')
     }
   }
 
@@ -110,7 +90,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
     setOver(null)
   }, [game])
 
-  // Depois de salvar, devolve o foco ao controle que originou a edição (o nó pode ter mudado de time).
+  // Depois de editar, devolve o foco ao controle que originou a edição (o nó pode ter mudado de time).
   useEffect(() => {
     const target = pendingFocus.current
     if (!target) return
@@ -124,10 +104,10 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
   const locationOf = (id: string) => draw?.teams.findIndex((t) => t.includes(id)) ?? -1
 
   function moveTo(id: string, target: number | 'reserves', focus?: { id: string; control: 'lock' | 'move' }) {
-    if (!draw || inFlight.current) return
+    if (!draw || blocked) return
     if (target === 'reserves') {
       if (draw.reserves.includes(id)) return
-      void persist(() => moveToReserves(draw, id), focus)
+      persist(() => moveToReserves(draw, id), focus)
       return
     }
     if (locationOf(id) === target) return
@@ -136,13 +116,13 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
       setError(check.reason)
       return
     }
-    void persist(() => moveToTeam(draw, id, target), focus)
+    persist(() => moveToTeam(draw, id, target), focus)
   }
 
   function swap(a: string, b: string) {
-    if (!draw || inFlight.current || a === b) return
+    if (!draw || blocked || a === b) return
     if (locationOf(a) < 0 && locationOf(b) < 0) return
-    void persist(() => swapPlayers(draw, a, b))
+    persist(() => swapPlayers(draw, a, b))
   }
 
   const draggedId = (e: DragEvent) => dragId ?? e.dataTransfer?.getData('text/plain') ?? null
@@ -262,7 +242,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
               className="btn btn-primary gap-[6px]"
               disabled={cannotDraw}
               aria-busy={blocked}
-              onClick={() => void runDraw(config)}
+              onClick={() => runDraw(config)}
             >
               <Icon name="shuffle" size={15} />
               Sortear de novo{lockedCount ? ` · ${lockedCount} ${lockedCount === 1 ? 'travado' : 'travados'}` : ''}
@@ -318,7 +298,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
                     data-player-id={player.id}
                     data-control="lock"
                     title={locked ? `Destravar ${player.name}` : `Travar ${player.name} neste time`}
-                    onClick={() => void persist(() => toggleLock(draw, player.id), { id: player.id, control: 'lock' })}
+                    onClick={() => persist(() => toggleLock(draw, player.id), { id: player.id, control: 'lock' })}
                   >
                     <svg viewBox="0 0 256 256" width="14" height="14" aria-hidden="true">
                       <path fill="currentColor" d={locked ? LOCK_ON : LOCK_OFF} />
@@ -367,7 +347,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, onUnauthorized
         onClose={() => setModalOpen(false)}
         onConfirm={(cfg) => {
           setModalOpen(false)
-          void runDraw(cfg)
+          runDraw(cfg)
         }}
       />
     </section>

@@ -243,6 +243,30 @@ export async function saveDraw(db: D1Database, state: DrawState): Promise<Game> 
   throw new ValidationError(CHANGED)
 }
 
+// Salva de uma vez o que o painel editou localmente: quem vai jogar e o sorteio. Um único lote (transação).
+export async function saveGameState(db: D1Database, paid: string[], draw: DrawState | null): Promise<Game> {
+  const game = await requireActive(db)
+  const ids = [...new Set(paid)]
+  const { results } = await db.prepare('SELECT id FROM players WHERE archived = 0').all<{ id: string }>()
+  const known = new Set(results.map((r) => r.id))
+  if (ids.some((id) => !known.has(id))) throw new ValidationError('Jogador desconhecido na lista.')
+  if (draw) {
+    const error = validateDrawState(draw, new Set(ids))
+    if (error) throw new ValidationError(error)
+  }
+  const update = draw
+    ? db
+        .prepare('UPDATE games SET draw_json = ?, team_count = ?, team_size = ?, revision = revision + 1 WHERE id = ?')
+        .bind(JSON.stringify(draw), draw.teamCount, draw.teamSize, game.id)
+    : db.prepare('UPDATE games SET draw_json = NULL, revision = revision + 1 WHERE id = ?').bind(game.id)
+  await db.batch([
+    db.prepare('DELETE FROM game_paid WHERE game_id = ?').bind(game.id),
+    ...ids.map((id) => db.prepare('INSERT INTO game_paid (game_id, player_id) VALUES (?, ?)').bind(game.id, id)),
+    update,
+  ])
+  return publicGame(await requireActive(db))
+}
+
 export async function getSetting(db: D1Database, key: 'member_sees_stars'): Promise<boolean> {
   const row = await db.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>()
   return row?.value === 'true'

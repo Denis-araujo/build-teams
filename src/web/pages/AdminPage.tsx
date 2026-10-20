@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
+import { api, HttpError, UnauthorizedError } from '../api'
 import { PlayersPanel } from '../components/PlayersPanel'
 import { DrawArea } from '../components/DrawArea'
+import { SaveBar } from '../components/SaveBar'
 import { GameBar } from '../components/GameBar'
 import { SettingsToggle } from '../components/SettingsToggle'
 import { useAdminData } from '../hooks/useAdminData'
@@ -11,9 +12,34 @@ import LoginPage from './LoginPage'
 
 function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
   const data = useAdminData()
-  // Salvar o sorteio e as chamadas em lote não podem se sobrepor: respostas fora de ordem mostrariam um jogo velho.
-  const [bulkBusy, setBulkBusy] = useState(false)
-  const [drawBusy, setDrawBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const { dirty, save, discard, reload } = data
+
+  // Edições não salvas só existem nesta aba: avisa antes de fechar ou recarregar.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  async function onSave() {
+    if (saving) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await save()
+    } catch (e) {
+      if (e instanceof UnauthorizedError) onLoggedOut()
+      else if (e instanceof HttpError && e.status === 404) {
+        void reload()
+        setSaveError('O jogo mudou. A página foi atualizada.')
+      } else setSaveError(e instanceof HttpError && e.serverMessage ? e.serverMessage : 'Não foi possível salvar. Tente de novo.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     if (data.status === 'unauthorized') onLoggedOut()
@@ -60,11 +86,9 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 players={data.players}
                 game={data.game}
                 onPlayersChange={data.setPlayers}
-                onGameChange={data.setGame}
+                onGameChange={data.editGame}
                 onUnauthorized={onLoggedOut}
-                onStale={() => void data.reload()}
-                onBusyChange={setBulkBusy}
-                externalBusy={drawBusy}
+                externalBusy={saving}
                 footer={
                   <SettingsToggle settings={data.settings} setSettings={data.setSettings} onUnauthorized={onLoggedOut} />
                 }
@@ -73,16 +97,24 @@ function AdminFrame({ onLoggedOut }: { onLoggedOut: () => void }) {
                 gameCard={<GameBar game={data.game} setGame={data.setGame} onUnauthorized={onLoggedOut} />}
                 game={data.game}
                 players={data.players}
-                onGameChange={data.setGame}
-                onUnauthorized={onLoggedOut}
-                onStale={() => void data.reload()}
-                onBusyChange={setDrawBusy}
-                externalBusy={bulkBusy}
+                onGameChange={data.editGame}
+                externalBusy={saving}
               />
             </section>
           </>
         )}
       </main>
+      {data.status === 'ready' && dirty && (
+        <SaveBar
+          saving={saving}
+          error={saveError}
+          onSave={() => void onSave()}
+          onDiscard={() => {
+            setSaveError(null)
+            discard()
+          }}
+        />
+      )}
     </>
   )
 }

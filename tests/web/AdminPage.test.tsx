@@ -2,10 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { bootstrapFromLegacy } from '../helpers/bootstrapShim'
 import App from '../../src/web/App'
 import type { Game } from '../../src/shared/types'
 
-type Handler = (init: RequestInit) => { status: number; body?: unknown }
+type Handler = (init: RequestInit) => { status: number; body?: unknown } | Promise<{ status: number; body?: unknown }>
 type Routes = Record<string, Handler | { status: number; body?: unknown }>
 
 function respond(status: number, body?: unknown) {
@@ -17,9 +18,13 @@ const GAME: Game = { id: 'g1', date: '2026-10-24', time: '19:00', paid: [], draw
 function setup(routes: Routes) {
   const fetchMock = vi.fn(async (path: string, init: RequestInit = {}) => {
     const key = `${init.method ?? 'GET'} ${path}`
+    if (key === 'GET /api/admin/bootstrap') {
+      const out = await bootstrapFromLegacy(routes, init)
+      return respond(out.status, out.body)
+    }
     const r = routes[key]
     if (!r) return respond(404, { error: `sem rota ${key}` })
-    const out = typeof r === 'function' ? r(init) : r
+    const out = await (typeof r === 'function' ? r(init) : r)
     return respond(out.status, out.body)
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -39,6 +44,7 @@ const authed = (over: Routes = {}): Routes => ({
   ...over,
 })
 
+const body = (c: unknown[]) => (c[1] as RequestInit).body as string
 const calls = (f: ReturnType<typeof vi.fn>, key: string) =>
   f.mock.calls.filter(([p, i]) => `${(i as RequestInit | undefined)?.method ?? 'GET'} ${p}` === key)
 
@@ -119,105 +125,151 @@ describe('login', () => {
     await submit('certa')
     expect(await screen.findByText('Nenhum jogo marcado')).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Jogadores e sorteio' })).toBeTruthy()
-    expect(calls(f, 'GET /api/admin/game').length).toBeGreaterThan(0)
-    expect(calls(f, 'GET /api/admin/settings').length).toBeGreaterThan(0)
+    expect(calls(f, 'GET /api/admin/bootstrap').length).toBeGreaterThan(0)
   })
 })
 
-describe('Limpar com sorteio', () => {
-  it('após confirmar, o Game devolvido sem sorteio mostra o estado vazio', async () => {
-    const ana = { id: 'p1', name: 'Ana', rating: 4, archived: false }
-    const draw = { teamCount: 2, teamSize: 1, teams: [['p1'], []], reserves: [], locks: {} }
-    const game = { ...GAME, paid: ['p1'], draw }
-    setup(
-      authed({
-        'GET /api/admin/game': { status: 200, body: game },
-        'GET /api/admin/players': { status: 200, body: [ana] },
-        'PUT /api/admin/game/paid-all': { status: 200, body: { ...GAME, paid: [], draw: null } },
-      }),
-    )
-    await screen.findByLabelText('Pagou: Ana')
-    expect(screen.queryByText('Monte os times em três passos')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Limpar' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Limpar tudo' }))
-    expect(await screen.findByText('Monte os times em três passos')).toBeTruthy()
-    expect(
-      screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '0 de 1 jogadores'),
-    ).toBeTruthy()
-  })
-})
-
-describe('salvar sorteio x chamada em lote não se sobrepõem', () => {
+describe('rascunho e Salvar', () => {
   const ana = { id: 'p1', name: 'Ana', rating: 4, archived: false }
   const bia = { id: 'p2', name: 'Bia', rating: 3, archived: false }
   const draw = { teamCount: 2, teamSize: 1, teams: [['p1'], ['p2']], reserves: [], locks: {} }
   const game = { ...GAME, paid: ['p1', 'p2'], draw }
+  const loaded = (over: Routes = {}) =>
+    authed({
+      'GET /api/admin/game': { status: 200, body: game },
+      'GET /api/admin/players': { status: 200, body: [ana, bia] },
+      ...over,
+    })
+  const saveBtn = () => screen.getByRole('button', { name: 'Salvar' }) as HTMLButtonElement
+  const puts = (f: ReturnType<typeof vi.fn>) => calls(f, 'PUT /api/admin/game/state')
 
-  function gated(path: string) {
+  it('o painel carrega com uma única requisição (bootstrap) e sem barra de salvar', async () => {
+    const f = setup(loaded())
+    await screen.findByLabelText('Pagou: Ana')
+    expect(calls(f, 'GET /api/admin/bootstrap')).toHaveLength(1)
+    expect(calls(f, 'GET /api/admin/game')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull()
+  })
+
+  it('marcar e desmarcar caixas não faz requisição; Salvar manda tudo numa só', async () => {
+    const saved = { ...game, paid: ['p2'], draw: { ...draw, teams: [[], []] } }
+    const f = setup(loaded({ 'PUT /api/admin/game/state': { status: 200, body: saved } }))
+    fireEvent.click(await screen.findByLabelText('Pagou: Ana'))
+    fireEvent.click(screen.getByLabelText('Pagou: Bia'))
+    fireEvent.click(screen.getByLabelText('Pagou: Bia'))
+    expect(screen.getByText('Alterações não salvas')).toBeTruthy()
+    expect(puts(f)).toHaveLength(0)
+    // quem foi desmarcado já saiu do time, só na tela
+    expect(screen.queryByRole('button', { name: 'Travar Ana neste time' })).toBeNull()
+
+    fireEvent.click(saveBtn())
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull())
+    expect(puts(f)).toHaveLength(1)
+    expect(JSON.parse(body(puts(f)[0]))).toEqual({
+      paid: ['p2'],
+      draw: { teamCount: 2, teamSize: 1, teams: [[], []], reserves: [], locks: {} },
+    })
+    expect(calls(f, 'GET /api/admin/bootstrap')).toHaveLength(1)
+  })
+
+  it('Limpar com sorteio: confirma, esvazia o sorteio só na tela e vira rascunho', async () => {
+    const f = setup(loaded())
+    await screen.findByLabelText('Pagou: Ana')
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar tudo' }))
+    expect(await screen.findByText('Monte os times em três passos')).toBeTruthy()
+    expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === '0 de 2 jogadores')).toBeTruthy()
+    expect(puts(f)).toHaveLength(0)
+    expect(saveBtn()).toBeTruthy()
+  })
+
+  it('Sortear de novo e mover alguém não fazem requisição; só o Salvar', async () => {
+    const f = setup(loaded({ 'PUT /api/admin/game/state': { status: 200, body: game } }))
+    await screen.findByLabelText('Pagou: Ana')
+    fireEvent.click(screen.getByRole('button', { name: 'Sortear de novo' }))
+    fireEvent.change(screen.getByRole('combobox', { name: /Mover Ana para/ }), { target: { value: 'reserves' } })
+    expect(puts(f)).toHaveLength(0)
+    fireEvent.click(saveBtn())
+    await waitFor(() => expect(puts(f)).toHaveLength(1))
+    expect(f.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === 'PUT')).toHaveLength(1)
+  })
+
+  it('Descartar volta ao que está salvo, sem requisição', async () => {
+    const f = setup(loaded())
+    const box = (await screen.findByLabelText('Pagou: Ana')) as HTMLInputElement
+    fireEvent.click(box)
+    expect(box.checked).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Descartar' }))
+    expect((screen.getByLabelText('Pagou: Ana') as HTMLInputElement).checked).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull()
+    expect(puts(f)).toHaveLength(0)
+  })
+
+  it('desfazer a edição à mão também some com a barra', async () => {
+    setup(loaded())
+    const box = await screen.findByLabelText('Pagou: Bia')
+    fireEvent.click(box)
+    expect(saveBtn()).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Pagou: Bia'))
+    // Bia voltou como paga, mas fora do time: ainda difere do salvo
+    expect(saveBtn()).toBeTruthy()
+  })
+
+  it('durante o salvamento, os controles ficam bloqueados', async () => {
     let release!: () => void
     const gate = new Promise<void>((r) => (release = r))
-    const f = setup(
-      authed({
-        'GET /api/admin/game': { status: 200, body: game },
-        'GET /api/admin/players': { status: 200, body: [ana, bia] },
+    setup(
+      loaded({
+        'PUT /api/admin/game/state': async () => {
+          await gate
+          return { status: 200, body: { ...game, paid: ['p2'] } }
+        },
       }),
     )
-    const original = f.getMockImplementation() as (p: string, init?: RequestInit) => Promise<Response>
-    f.mockImplementation(async (p: string, init: RequestInit = {}) => {
-      if (p === path) {
-        await gate
-        return respond(200, path.endsWith('draw') ? game : { ...game, paid: [], draw: null })
-      }
-      return original(p, init)
-    })
-    return release
-  }
-  const all = () => screen.getByRole('button', { name: 'Marcar todos' }) as HTMLButtonElement
-  const clear = () => screen.getByRole('button', { name: 'Limpar' }) as HTMLButtonElement
-
-  it('com um salvamento do sorteio pendente, Marcar todos e Limpar ficam desabilitados', async () => {
-    const release = gated('/api/admin/game/draw')
-    await screen.findByLabelText('Pagou: Ana')
-    expect(all().disabled).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Sortear de novo' }))
-    await waitFor(() => expect(all().disabled).toBe(true))
-    expect(clear().disabled).toBe(true)
-    expect(all().getAttribute('aria-busy')).toBe('true')
+    fireEvent.click(await screen.findByLabelText('Pagou: Ana'))
+    fireEvent.click(saveBtn())
+    const saving = await screen.findByRole('button', { name: 'Salvando…' })
+    expect(saving).toHaveProperty('disabled', true)
+    expect((screen.getByLabelText('Pagou: Bia') as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Marcar todos' }) as HTMLButtonElement).disabled).toBe(true)
     release()
-    await waitFor(() => expect(all().disabled).toBe(false))
-    expect(clear().disabled).toBe(false)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull())
   })
 
-  it('com uma chamada em lote pendente, o sorteio e as travas ficam bloqueados', async () => {
-    const release = gated('/api/admin/game/paid-all')
-    await screen.findByLabelText('Pagou: Ana')
-    fireEvent.click(all())
-    const again = () => screen.getByRole('button', { name: 'Sortear de novo' }) as HTMLButtonElement
-    const format = () => screen.getByRole('button', { name: 'Formato' }) as HTMLButtonElement
-    await waitFor(() => expect(again().disabled).toBe(true))
-    expect(format().disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Travar Ana neste time' }).getAttribute('aria-disabled')).toBe('true')
-    release()
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Sortear de novo' })).toBeNull())
+  it('400 mostra a mensagem do servidor e mantém o rascunho', async () => {
+    setup(loaded({ 'PUT /api/admin/game/state': { status: 400, body: { error: 'Sorteio inválido' } } }))
+    fireEvent.click(await screen.findByLabelText('Pagou: Ana'))
+    fireEvent.click(saveBtn())
+    expect((await screen.findByRole('alert')).textContent).toBe('Sorteio inválido')
+    expect((screen.getByLabelText('Pagou: Ana') as HTMLInputElement).checked).toBe(false)
+    expect(saveBtn().disabled).toBe(false)
   })
 
-  it('o bloqueio do sorteio some quando a chamada em lote termina', async () => {
-    const release = gated('/api/admin/game/paid-all')
-    // o jogo devolvido mantém o sorteio para podermos conferir o reabilitar
-    const f = fetch as unknown as ReturnType<typeof vi.fn>
-    const inner = f.getMockImplementation() as (p: string, init?: RequestInit) => Promise<Response>
-    f.mockImplementation(async (p: string, init?: RequestInit) => {
-      const res = await inner(p, init)
-      return p === '/api/admin/game/paid-all' ? respond(200, game) : res
-    })
-    await screen.findByLabelText('Pagou: Ana')
-    fireEvent.click(all())
-    const again = () => screen.getByRole('button', { name: 'Sortear de novo' }) as HTMLButtonElement
-    await waitFor(() => expect(again().disabled).toBe(true))
-    release()
-    await waitFor(() => expect(again().disabled).toBe(false))
-    expect(screen.getByRole('button', { name: 'Formato' })).toHaveProperty('disabled', false)
-    expect(screen.getByRole('button', { name: 'Travar Ana neste time' }).getAttribute('aria-disabled')).toBe('false')
+  it('401 ao salvar volta ao login', async () => {
+    setup(loaded({ 'PUT /api/admin/game/state': { status: 401 } }))
+    fireEvent.click(await screen.findByLabelText('Pagou: Ana'))
+    fireEvent.click(saveBtn())
+    expect(await screen.findByLabelText('Senha')).toBeTruthy()
+  })
+
+  it('404 ao salvar recarrega os dados e avisa que o jogo mudou', async () => {
+    const f = setup(loaded({ 'PUT /api/admin/game/state': { status: 404, body: { error: 'Não há jogo ativo' } } }))
+    fireEvent.click(await screen.findByLabelText('Pagou: Ana'))
+    fireEvent.click(saveBtn())
+    await waitFor(() => expect(calls(f, 'GET /api/admin/bootstrap')).toHaveLength(2))
+  })
+
+  it('com edições pendentes o navegador avisa antes de sair', async () => {
+    setup(loaded())
+    const box = await screen.findByLabelText('Pagou: Ana')
+    const ev = () => {
+      const e = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    expect(ev()).toBe(false)
+    fireEvent.click(box)
+    expect(ev()).toBe(true)
   })
 })
 

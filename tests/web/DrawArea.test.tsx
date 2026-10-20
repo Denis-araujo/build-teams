@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { DrawArea } from '../../src/web/components/DrawArea'
 import type { DrawState, Game, Player } from '../../src/shared/types'
@@ -14,14 +14,10 @@ const P = (id: string, name: string, rating: number): Player => ({ id, name, rat
 const PLAYERS = [P('a', 'Ana', 4), P('b', 'Bia', 3), P('c', 'Cris', 2), P('d', 'Duda', 5), P('e', 'Edu', 1), P('f', 'Ana', 3)]
 const GAME = (paid: string[], draw: DrawState | null = null): Game => ({ id: 'g', date: '2026-10-24', time: '19:00', paid, draw })
 
-function respond(status: number, body?: unknown) {
-  return { ok: status >= 200 && status < 300, status, json: async () => body } as Response
-}
-
-function setup(initial: Game | null, put: (init: RequestInit) => Promise<Response> | Response) {
-  const fetchMock = vi.fn(async (_p: string, init: RequestInit = {}) => put(init))
+// Sortear e editar só mexem no rascunho local (onGameChange): nenhuma requisição sai daqui.
+function setup(initial: Game | null, opts: { externalBusy?: boolean } = {}) {
+  const fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
-  const onUnauthorized = vi.fn()
   const onGameChange = vi.fn()
   function Host() {
     const [game, setGame] = useState<Game | null>(initial)
@@ -29,26 +25,26 @@ function setup(initial: Game | null, put: (init: RequestInit) => Promise<Respons
       <DrawArea
         game={game}
         players={PLAYERS}
+        externalBusy={opts.externalBusy}
         onGameChange={(g) => {
           onGameChange(g)
           setGame(g)
         }}
-        onUnauthorized={onUnauthorized}
       />
     )
   }
   render(<Host />)
-  return { fetchMock, onUnauthorized, onGameChange }
+  return { fetchMock, onGameChange }
 }
 
-const sent = (f: ReturnType<typeof vi.fn>, i = 0) => JSON.parse((f.mock.calls[i][1] as RequestInit).body as string) as DrawState
+const lastDraw = (f: ReturnType<typeof vi.fn>) => (f.mock.calls.at(-1)![0] as Game).draw as DrawState
 const open = () => fireEvent.click(screen.getByRole('button', { name: 'Montar times' }))
 
 describe('copiar escalação', () => {
   it('o texto copiado traz a hora do jogo', async () => {
     const writeText = vi.fn(async () => {})
     const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['a', 'b'], ['c']], reserves: [], locks: {} }
-    setup({ ...GAME(['a', 'b', 'c'], draw), time: '20:30' }, () => respond(500))
+    setup({ ...GAME(['a', 'b', 'c'], draw), time: '20:30' })
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     fireEvent.click(screen.getByRole('button', { name: 'Copiar escalação' }))
     await screen.findByRole('button', { name: 'Copiado ✓' })
@@ -58,7 +54,7 @@ describe('copiar escalação', () => {
 
 describe('estados iniciais', () => {
   it('sem sorteio: onboarding de três passos; cabeçalho só com o título (sem chip nem botões)', () => {
-    setup(GAME(['a', 'b']), () => respond(500))
+    setup(GAME(['a', 'b']))
     expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
     expect(screen.queryByText('Nenhum time montado ainda')).toBeNull()
     expect(screen.getByText('2 de 6 marcados na lista ao lado.')).toBeTruthy()
@@ -68,14 +64,14 @@ describe('estados iniciais', () => {
     expect(screen.queryByText('Equilíbrio')).toBeNull()
   })
   it('config padrão 2 × 6 no formato do modal, sem chip antes do sorteio', () => {
-    setup(GAME(['a', 'b']), () => respond(500))
+    setup(GAME(['a', 'b']))
     open()
     expect(screen.getByTestId('teams-value').textContent).toBe('2')
     expect(screen.getByTestId('size-value').textContent).toBe('6')
   })
   it('com sorteio: chip "2 times × 2", Formato e Sortear de novo no cabeçalho, sem Montar times', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['a', 'b'], ['c']], reserves: [], locks: {} }
-    setup(GAME(['a', 'b', 'c'], draw), () => respond(500))
+    setup(GAME(['a', 'b', 'c'], draw))
     expect(screen.getByText('2 times × 2')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Formato' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Sortear de novo' })).toBeTruthy()
@@ -84,14 +80,14 @@ describe('estados iniciais', () => {
   })
   it('Formato abre o modal do formato', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['a', 'b'], ['c']], reserves: [], locks: {} }
-    setup(GAME(['a', 'b', 'c'], draw), () => respond(500))
+    setup(GAME(['a', 'b', 'c'], draw))
     fireEvent.click(screen.getByRole('button', { name: 'Formato' }))
     expect(screen.getByTestId('teams-value').textContent).toBe('2')
     expect(screen.getByTestId('size-value').textContent).toBe('2')
   })
   it('sorteio com todas as listas vazias é estado vazio: onboarding, sem cards nem equilíbrio', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [[], []], reserves: [], locks: {} }
-    setup(GAME(['a', 'b'], draw), () => respond(500))
+    setup(GAME(['a', 'b'], draw))
     expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Time A' })).toBeNull()
     expect(screen.queryByText('Equilíbrio')).toBeNull()
@@ -99,26 +95,26 @@ describe('estados iniciais', () => {
   })
   it('sorteio só com ids desconhecidos também é estado vazio', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 2, teams: [['zz'], []], reserves: [], locks: {} }
-    setup(GAME(['a', 'b'], draw), () => respond(500))
+    setup(GAME(['a', 'b'], draw))
     expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Time A' })).toBeNull()
   })
   it('onboarding: passo 1 concluído e botão habilitado com 2 marcados; desabilitado com 1', () => {
-    setup(GAME(['a']), () => respond(500))
+    setup(GAME(['a']))
     expect((screen.getByRole('button', { name: 'Montar times' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('1').className).not.toContain('bg-navy')
     cleanup()
-    setup(GAME(['a', 'b']), () => respond(500))
+    setup(GAME(['a', 'b']))
     expect((screen.getByRole('button', { name: 'Montar times' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.getByText('1').className).toContain('bg-navy')
   })
   it('onboarding: o clique em Montar times abre o formato', () => {
-    setup(GAME(['a', 'b']), () => respond(500))
+    setup(GAME(['a', 'b']))
     open()
     expect(screen.getByTestId('teams-value')).toBeTruthy()
   })
   it('sem jogo: Montar times desabilitado com dica', () => {
-    setup(null, () => respond(500))
+    setup(null)
     expect((screen.getByRole('button', { name: 'Montar times' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('Cadastre a data do jogo primeiro')).toBeTruthy()
     expect(screen.getByText('Monte os times em três passos')).toBeTruthy()
@@ -126,71 +122,39 @@ describe('estados iniciais', () => {
 })
 
 describe('sortear', () => {
-  it('envia só pagos, usa a config do modal e renderiza a RESPOSTA do servidor', async () => {
-    const reply: DrawState = { teamCount: 2, teamSize: 2, teams: [['d', 'e'], ['a', 'f']], reserves: ['b'], locks: {} }
-    const { fetchMock, onGameChange } = setup(GAME(['a', 'b', 'd', 'e', 'f']), () => respond(200, GAME(['a', 'b', 'd', 'e', 'f'], reply)))
+  it('sorteia só os pagos com a config do modal e mostra o resultado sem fazer requisição', () => {
+    const { fetchMock, onGameChange } = setup(GAME(['a', 'b', 'd', 'e', 'f']))
     open()
     // 5 pagos; 2 times de 2
     for (let i = 0; i < 5; i++) fireEvent.click(screen.getByRole("button", { name: "Menos jogadores por time" }))
     fireEvent.click(screen.getByRole('button', { name: 'Mais jogadores por time' }))
     expect(screen.getByTestId('size-value').textContent).toBe('2')
     fireEvent.click(screen.getByRole('button', { name: 'Sortear' }))
-    await screen.findByRole('heading', { name: 'Time A' })
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe('/api/admin/game/draw')
-    expect(init.method).toBe('PUT')
-    const body = sent(fetchMock)
-    expect(body.teamCount).toBe(2)
-    expect(body.teamSize).toBe(2)
-    const ids = [...body.teams.flat(), ...body.reserves].sort()
-    expect(ids).toEqual(['a', 'b', 'd', 'e', 'f'])
-    expect(body.teams.every((t) => t.length <= 2)).toBe(true)
-    expect(onGameChange).toHaveBeenCalledWith(GAME(['a', 'b', 'd', 'e', 'f'], reply))
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(onGameChange).toHaveBeenCalledTimes(1)
+    const draw = lastDraw(onGameChange)
+    expect(draw.teamCount).toBe(2)
+    expect(draw.teamSize).toBe(2)
+    expect([...draw.teams.flat(), ...draw.reserves].sort()).toEqual(['a', 'b', 'd', 'e', 'f'])
+    expect(draw.teams.every((t) => t.length <= 2)).toBe(true)
 
-    // tela vem da RESPOSTA: Time A = Duda + Edu
-    const teamA = screen.getByRole('heading', { name: 'Time A' }).closest('section') as HTMLElement
-    expect(within(teamA).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      expect.stringContaining('Duda'),
-      expect.stringContaining('Edu'),
-    ])
-    // totais, médias, nomes duplicados (Ana aparece no time B e Ana não está nas reservas)
-    expect(within(teamA).getByText('6')).toBeTruthy()
-    expect(within(teamA).getByText('média 3')).toBeTruthy()
-    expect(within(teamA).getByText('2 jogadores')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Time A' })).toBeTruthy()
     expect(screen.getByText('Reservas · 1')).toBeTruthy()
-    expect(screen.getByText('Bia')).toBeTruthy()
-    // spread: 6 vs 7 → 1 ★ , Quase parelho
     expect(screen.getByText('Equilíbrio')).toBeTruthy()
-    expect(screen.getByText('Diferença 1 ★')).toBeTruthy()
-    expect(screen.getByText('Quase parelho')).toBeTruthy()
     expect(screen.getByText('2 times × 2')).toBeTruthy()
-    expect(Array.from(screen.getByTestId('balance-bar').children).map((c) => c.textContent)).toEqual(['A6 ★', 'B7 ★'])
   })
 
-  it('nomes duplicados aparecem separadamente', async () => {
-    const reply: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['f']], reserves: [], locks: {} }
-    setup(GAME(['a', 'f']), () => respond(200, GAME(['a', 'f'], reply)))
+  it('nomes duplicados aparecem separadamente', () => {
+    setup(GAME(['a', 'f']))
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Sortear' }))
-    await screen.findByRole('heading', { name: 'Time B' })
     expect(screen.getAllByText('Ana')).toHaveLength(2)
-  })
-
-  it('médias quando os tamanhos diferem', async () => {
-    const reply: DrawState = { teamCount: 2, teamSize: 3, teams: [['a', 'b', 'c'], ['d']], reserves: [], locks: {} }
-    setup(GAME(['a', 'b', 'c', 'd']), () => respond(200, GAME(['a', 'b', 'c', 'd'], reply)))
-    open()
-    fireEvent.click(screen.getByRole('button', { name: 'Sortear' }))
-    await screen.findByRole('heading', { name: 'Time A' })
-    expect(screen.getByText('Diferença 2 ★ na média por jogador')).toBeTruthy()
-    expect(screen.getByText('Desequilibrado')).toBeTruthy()
   })
 
   it('rodapé com as duas dicas e sem aviso quando ninguém ficou de fora', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
-    setup(GAME(['a', 'b'], draw), () => respond(500))
+    setup(GAME(['a', 'b'], draw))
     expect(screen.getByText('Arraste para trocar de time')).toBeTruthy()
     expect(screen.getByText('Cadeado mantém o jogador no time ao sortear de novo')).toBeTruthy()
     expect(screen.queryByText(/de fora/)).toBeNull()
@@ -198,68 +162,54 @@ describe('sortear', () => {
 
   it('aviso de jogador que ficou de fora depois do sorteio', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
-    setup(GAME(['a', 'b', 'c'], draw), () => respond(500))
+    setup(GAME(['a', 'b', 'c'], draw))
     expect(screen.getByText('1 jogador ficou de fora — sorteie de novo para incluir.')).toBeTruthy()
   })
   it('aviso no plural', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
-    setup(GAME(['a', 'b', 'c', 'd'], draw), () => respond(500))
+    setup(GAME(['a', 'b', 'c', 'd'], draw))
     expect(screen.getByText('2 jogadores ficaram de fora — sorteie de novo para incluir.')).toBeTruthy()
   })
 
-  it('Sortear de novo reenvia a config guardada, mantém travas só de pagos', async () => {
+  it('Sortear de novo mantém a config guardada e as travas só de pagos', () => {
     const draw: DrawState = { teamCount: 3, teamSize: 1, teams: [['a'], ['b'], ['c']], reserves: [], locks: { a: 0, e: 1, b: 2 } }
-    const { fetchMock } = setup(GAME(['a', 'b', 'c'], draw), () => respond(200, GAME(['a', 'b', 'c'], draw)))
+    const { fetchMock, onGameChange } = setup(GAME(['a', 'b', 'c'], draw))
     // e (travado) não pagou; b está na trava 2 → ok
-    const btn = screen.getByRole('button', { name: 'Sortear de novo · 2 travados' })
+    fireEvent.click(screen.getByRole('button', { name: 'Sortear de novo · 2 travados' }))
+    expect(fetchMock).not.toHaveBeenCalled()
+    const next = lastDraw(onGameChange)
+    expect(next.teamCount).toBe(3)
+    expect(next.teamSize).toBe(1)
+    expect(next.locks).toEqual({ a: 0, b: 2 })
+    expect(next.teams.flat().sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('sem rodar nada no servidor, Sortear de novo várias vezes só edita o rascunho', () => {
+    const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
+    const { fetchMock, onGameChange } = setup(GAME(['a', 'b'], draw))
+    const btn = screen.getByRole('button', { name: 'Sortear de novo' })
     fireEvent.click(btn)
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    const body = sent(fetchMock)
-    expect(body.teamCount).toBe(3)
-    expect(body.teamSize).toBe(1)
-    expect(body.locks).toEqual({ a: 0, b: 2 })
-    expect(body.teams.flat().sort()).toEqual(['a', 'b', 'c'])
+    fireEvent.click(btn)
+    expect(onGameChange).toHaveBeenCalledTimes(2)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('400 mostra a mensagem e mantém os times anteriores', async () => {
+  it('com o rascunho salvando (externalBusy), os botões ficam desabilitados', () => {
     const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
-    setup(GAME(['a', 'b'], draw), () => respond(400, { error: 'Sorteio inválido.' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Sortear de novo' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('Sorteio inválido.')
-    expect(screen.getByRole('heading', { name: 'Time A' })).toBeTruthy()
-    expect(screen.getByText('Ana')).toBeTruthy()
-  })
-
-  it('401 chama onUnauthorized', async () => {
-    const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
-    const { onUnauthorized } = setup(GAME(['a', 'b'], draw), () => respond(401, { error: 'x' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Sortear de novo' }))
-    await waitFor(() => expect(onUnauthorized).toHaveBeenCalledTimes(1))
-    expect(screen.queryByRole('alert')).toBeNull()
-  })
-
-  it('clique duplo não envia dois pedidos; botões ficam desabilitados com aria-busy', async () => {
-    const draw: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
-    let release!: (r: Response) => void
-    const { fetchMock } = setup(GAME(['a', 'b'], draw), () => new Promise<Response>((res) => (release = res)))
+    const { onGameChange } = setup(GAME(['a', 'b'], draw), { externalBusy: true })
     const btn = screen.getByRole('button', { name: 'Sortear de novo' }) as HTMLButtonElement
-    fireEvent.click(btn)
-    fireEvent.click(btn)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(btn.disabled).toBe(true))
+    expect(btn.disabled).toBe(true)
     expect(btn.getAttribute('aria-busy')).toBe('true')
     expect((screen.getByRole('button', { name: 'Formato' }) as HTMLButtonElement).disabled).toBe(true)
-    release(respond(200, GAME(['a', 'b'], draw)))
-    await waitFor(() => expect(btn.disabled).toBe(false))
+    fireEvent.click(btn)
+    expect(onGameChange).not.toHaveBeenCalled()
   })
 
-  it('jogadores não pagos nunca entram, mesmo que existam na lista', async () => {
-    const reply: DrawState = { teamCount: 2, teamSize: 1, teams: [['a'], ['b']], reserves: [], locks: {} }
-    const { fetchMock } = setup(GAME(['a', 'b', 'ghost']), () => respond(200, GAME(['a', 'b'], reply)))
+  it('jogadores não pagos nunca entram, mesmo que existam na lista', () => {
+    const { onGameChange } = setup(GAME(['a', 'b', 'ghost']))
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Sortear' }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-    const body = sent(fetchMock)
-    expect([...body.teams.flat(), ...body.reserves].sort()).toEqual(['a', 'b'])
+    const draw = lastDraw(onGameChange)
+    expect([...draw.teams.flat(), ...draw.reserves].sort()).toEqual(['a', 'b'])
   })
 })
