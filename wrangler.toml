@@ -5,7 +5,6 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "montar-times"
-# Placeholder: troque pelo id impresso por `npx wrangler d1 create montar-times`.
-# O D1 local (--local) ignora este valor.
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+# Id impresso por `npx wrangler d1 create montar-times`. O D1 local (--local) ignora este valor.
+database_id = "8cd950d1-3937-461e-8b29-4ace4101ba7d"
 migrations_dir = "migrations"
