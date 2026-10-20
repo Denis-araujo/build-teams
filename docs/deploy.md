@@ -99,6 +99,17 @@ npx wrangler pages deploy dist --project-name montar-times --branch main
 
 (Se a sua versão do wrangler aceitar definir segredos antes do primeiro deploy, dá para pular o segundo deploy, mas a ordem acima é a mais segura.)
 
+## Deploy automático (GitHub Actions)
+
+O workflow `.github/workflows/deploy.yml` roda a cada push na `main`: testes, build e `wrangler pages deploy` no projeto `montar-times`. Ele não aplica migrations; se uma mudança alterar o schema, rode antes o passo 3 (`d1 migrations apply ... --remote`).
+
+Configuração única, em GitHub > Settings > Secrets and variables > Actions:
+
+- `CLOUDFLARE_ACCOUNT_ID`: o id da conta (painel Cloudflare, barra lateral da página inicial, ou `npx wrangler whoami`).
+- `CLOUDFLARE_API_TOKEN`: crie em Cloudflare > My Profile > API Tokens > Create Token, com a permissão **Account > Cloudflare Pages > Edit**.
+
+Os segredos do site (`ADMIN_PASSWORD`, `SESSION_SECRET`) continuam no Cloudflare (passo 7) e não passam pelo GitHub.
+
 ## Verificação depois do deploy
 
 Troque `<site>` pela URL publicada.
