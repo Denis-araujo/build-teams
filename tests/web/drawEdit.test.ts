@@ -105,6 +105,10 @@ describe('canMoveToTeam', () => {
       reason: 'Time A está cheio (2 jogadores). Troque com alguém ou mova alguém para as reservas.',
     })
   })
+  it('quem está nas reservas entra em time cheio', () => {
+    expect(canMoveToTeam(base(), 'd', 0)).toEqual({ ok: true })
+    expect(moveToTeam(base(), 'd', 0).teams).toEqual([['a', 'b', 'd'], ['c']])
+  })
   it('mesmo time é ok mesmo cheio', () => {
     expect(canMoveToTeam(base(), 'a', 0)).toEqual({ ok: true })
   })

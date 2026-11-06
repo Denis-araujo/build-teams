@@ -189,7 +189,7 @@ export function DrawArea({ gameCard, game, players, onGameChange, externalBusy =
         }
       >
         {draw!.teams.map((t, i) => {
-          const full = i !== teamIndex && t.length >= draw!.teamSize
+          const full = teamIndex >= 0 && i !== teamIndex && t.length >= draw!.teamSize
           return (
             <option key={i} value={i} disabled={full}>
               Time {teamLetter(i)}

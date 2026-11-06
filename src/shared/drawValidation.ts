@@ -22,7 +22,7 @@ export function validateDrawState(state: DrawState, paidIds: ReadonlySet<string>
   };
 
   for (const team of teams) {
-    if (team.length > teamSize) return 'Time com mais jogadores que o permitido.';
+    // Time pode passar de teamSize: o admin pode puxar jogadores das reservas para times cheios.
     for (const id of team) {
       const err = check(id);
       if (err) return err;

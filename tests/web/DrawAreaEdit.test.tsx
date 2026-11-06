@@ -225,6 +225,8 @@ describe('Mover para (teclado e toque)', () => {
     expect(opts.map((o) => o.textContent)).toEqual(['Time A (cheio)', 'Time B', 'Reservas'])
     expect(opts[0].disabled).toBe(true)
     expect((cris as HTMLSelectElement).value).toBe('1')
+    const dani = within(screen.getByRole('combobox', { name: 'Mover Duda para' })).getAllByRole('option') as HTMLOptionElement[]
+    expect(dani[0].disabled).toBe(false)
     const ana = within(screen.getByRole('combobox', { name: 'Mover Ana para' })).getAllByRole('option') as HTMLOptionElement[]
     expect(ana[0].textContent).toBe('Time A')
     expect(ana[0].disabled).toBe(false)

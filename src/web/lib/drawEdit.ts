@@ -80,7 +80,8 @@ export function canMoveToTeam(
 ): { ok: true } | { ok: false; reason: string } {
   if (locate(draw, playerId) === null) return { ok: false, reason: 'Jogador não está mais no sorteio.' }
   if (draw.teams[teamIndex]?.includes(playerId)) return { ok: true }
-  if ((draw.teams[teamIndex]?.length ?? 0) >= draw.teamSize) {
+  // Quem está nas reservas pode entrar num time cheio (o time passa do tamanho padrão).
+  if (locate(draw, playerId) !== -1 && (draw.teams[teamIndex]?.length ?? 0) >= draw.teamSize) {
     return {
       ok: false,
       reason: `Time ${teamLetter(teamIndex)} está cheio (${draw.teamSize} jogadores). Troque com alguém ou mova alguém para as reservas.`,
