@@ -164,7 +164,11 @@ export function DrawArea({ gameCard, game, players, onGameChange, externalBusy =
       e.stopPropagation()
       const id = draggedId(e)
       endDrag()
-      if (id) swap(id, targetId)
+      if (!id) return
+      // Reserva solta sobre alguém de um time entra nesse time (sem expulsar ninguém); a troca fica para quem já está num time.
+      const targetTeam = locationOf(targetId)
+      if (locationOf(id) < 0 && targetTeam >= 0) moveTo(id, targetTeam)
+      else swap(id, targetId)
     },
   })
   const draggable = (id: string) => ({

@@ -113,6 +113,13 @@ describe('arrastar e soltar', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('reserva solta sobre jogador de time cheio entra no time sem expulsar ninguém', async () => {
+    const { onGameChange } = setup(GAME(DRAW({ teams: [['a', 'b'], ['c']], reserves: ['d', 'e'] })))
+    fireEvent.drop(row('Ana'), { dataTransfer: drag('Duda') })
+    await waitFor(() => expect(onGameChange).toHaveBeenCalledTimes(1))
+    expect(sent(onGameChange)).toMatchObject({ teams: [['a', 'b', 'd'], ['c']], reserves: ['e'] })
+  })
+
   it('soltar nas reservas manda o jogador para lá', async () => {
     const { onGameChange } = setup(GAME(DRAW()))
     fireEvent.drop(reserves(), { dataTransfer: drag('Bia') })
